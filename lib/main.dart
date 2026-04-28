@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:freshio/frontend/screens/home_page.dart';
+import 'package:provider/provider.dart';
+
+import 'package:freshio/providers/inventory_provider.dart';
+import 'package:freshio/providers/recipe_provider.dart';
+import 'package:freshio/core/theme/app_theme.dart';
+import 'package:freshio/frontend/screens/splash_page.dart';
 
 void main() {
   runApp(const FreshioApp());
@@ -10,32 +15,31 @@ class FreshioApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Freshio',
+    return MultiProvider(
+      providers: [
 
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        scaffoldBackgroundColor: Colors.grey[100],
+        ////////////////////////////////////////////////////////
+        // 📦 INVENTORY
+        ////////////////////////////////////////////////////////
+
+        ChangeNotifierProvider(
+          create: (_) => InventoryProvider()..loadItems(),
+        ),
+
+        ////////////////////////////////////////////////////////
+        // 🧠 SMART RECIPES
+        ////////////////////////////////////////////////////////
+
+        ChangeNotifierProvider(
+          create: (_) => RecipeProvider(),
+        ),
+      ],
+
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.theme,
+        home: const SplashPage(),
       ),
-
-      builder: (context, child) {
-        return Container(
-          color: Colors.grey[300], // outside background
-          child: Center(
-            child: Container(
-              width: 400,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: child,
-            ),
-          ),
-        );
-      },
-
-      home: HomePage(),
     );
   }
 }

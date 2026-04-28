@@ -1,0 +1,73 @@
+import 'package:flutter/material.dart';
+import '../data/models/item.dart';
+import '../data/services/local_storage_service.dart';
+
+class InventoryProvider extends ChangeNotifier {
+
+  final LocalStorageService _service = LocalStorageService();
+
+  List<Item> _items = [];
+
+  List<Item> get items => _items;
+
+  ////////////////////////////////////////////////////////////
+  // LOAD
+  ////////////////////////////////////////////////////////////
+
+  Future<void> loadItems() async {
+    _items = await _service.loadItems();
+    notifyListeners();
+  }
+
+  ////////////////////////////////////////////////////////////
+  // ADD
+  ////////////////////////////////////////////////////////////
+
+  void addItem(Item item) {
+    _items.add(item);
+    _save();
+  }
+
+  ////////////////////////////////////////////////////////////
+  // DELETE
+  ////////////////////////////////////////////////////////////
+
+  void deleteItem(int index) {
+    _items.removeAt(index);
+    _save();
+  }
+
+  ////////////////////////////////////////////////////////////
+  // UPDATE
+  ////////////////////////////////////////////////////////////
+
+  void updateItem(int index, Item item) {
+    _items[index] = item;
+    _save();
+  }
+
+  ////////////////////////////////////////////////////////////
+  // AUTO WASTE UPDATE
+  ////////////////////////////////////////////////////////////
+
+  void updateWasteStatus() {
+    final now = DateTime.now();
+
+    for (var item in _items) {
+      if (item.expiry.isBefore(now)) {
+        item.isWaste = true;
+      }
+    }
+
+    notifyListeners();
+  }
+
+  ////////////////////////////////////////////////////////////
+  // SAVE
+  ////////////////////////////////////////////////////////////
+
+  void _save() {
+    _service.saveItems(_items);
+    notifyListeners();
+  }
+}
