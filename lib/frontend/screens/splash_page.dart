@@ -53,7 +53,7 @@ class _SplashPageState extends State<SplashPage>
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final isNewUser = prefs.getBool('is_new_user') ?? true;
+    final isNewUser = prefs.getBool('isFirstTimeUser') ?? true;
 
     if (!mounted) return;
 

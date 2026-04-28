@@ -4,6 +4,8 @@ import 'package:flutter/rendering.dart';
 import '../screens/home_page.dart';
 import '../screens/inventory_page.dart';
 import '../screens/recipe_page.dart';
+import '../screens/analytics_page.dart';
+import '../screens/shopping_list_page.dart';
 import '../screens/notification_page.dart';
 import '../screens/profile_page.dart';
 
@@ -22,6 +24,8 @@ class _MainNavigationState extends State<MainNavigation> {
     const HomePage(),
     const InventoryPage(),
     RecipePage(),
+    const AnalyticsPage(),
+    const ShoppingListPage(),
     const NotificationPage(),
     const ProfilePage(),
   ];
@@ -96,6 +100,14 @@ class _MainNavigationState extends State<MainNavigation> {
                   BottomNavigationBarItem(
                     icon: Icon(Icons.restaurant),
                     label: "Recipes",
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.bar_chart),
+                    label: "Analytics",
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.shopping_cart),
+                    label: "Shopping",
                   ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.notifications),
