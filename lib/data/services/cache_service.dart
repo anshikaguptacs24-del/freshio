@@ -1,15 +1,14 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freshio/data/services/storage_service.dart';
 
 class CacheService {
   static const String _recipesKey = 'cached_recipes_data';
+  final StorageService _storage = StorageService();
 
   Future<void> saveRecipes(String data) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_recipesKey, data);
+    await _storage.setString(_recipesKey, data);
   }
 
   Future<String?> getRecipes() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_recipesKey);
+    return _storage.getString(_recipesKey);
   }
 }

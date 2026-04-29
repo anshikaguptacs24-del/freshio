@@ -1,34 +1,28 @@
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freshio/data/models/item.dart';
+import 'package:freshio/data/services/storage_service.dart';
+import 'package:flutter/foundation.dart';
+
+List<dynamic> _parseJson(String data) => jsonDecode(data) as List<dynamic>;
 
 class LocalStorageService {
-
-  ////////////////////////////////////////////////////////////
-  // SAVE ITEMS
-  ////////////////////////////////////////////////////////////
+  final StorageService _storage = StorageService();
 
   Future<void> saveItems(List<Item> items) async {
-    final prefs = await SharedPreferences.getInstance();
-
     final data = items.map((e) => e.toJson()).toList();
-
-    await prefs.setString("items", jsonEncode(data));
+    await _storage.setString("items", jsonEncode(data));
   }
 
-  ////////////////////////////////////////////////////////////
-  // LOAD ITEMS
-  ////////////////////////////////////////////////////////////
-
   Future<List<Item>> loadItems() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final data = prefs.getString("items");
-
+    final data = _storage.getString("items");
     if (data == null) return [];
 
-    final decoded = jsonDecode(data) as List;
-
-    return decoded.map((e) => Item.fromJson(e)).toList();
+    try {
+      final List<dynamic> decoded = await compute(_parseJson, data);
+      return decoded.map((e) => Item.fromJson(e)).toList();
+    } catch (e) {
+      debugPrint("Error loading items: $e");
+      return [];
+    }
   }
 }

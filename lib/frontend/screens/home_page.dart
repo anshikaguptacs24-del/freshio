@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:freshio/core/theme/app_theme.dart';
+import 'package:freshio/data/models/item.dart';
+import 'package:freshio/data/services/storage_service.dart';
 import 'package:freshio/providers/inventory_provider.dart';
 import 'package:freshio/providers/recipe_provider.dart';
+import 'package:freshio/providers/user_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freshio/frontend/screens/inventory_page.dart';
 import 'package:freshio/frontend/screens/recipe_page.dart';
 import 'package:freshio/frontend/screens/analytics_page.dart';
-import 'package:freshio/frontend/screens/shopping_list_page.dart';
-import 'package:freshio/frontend/screens/profile_page.dart';
+import 'package:freshio/frontend/screens/notification_page.dart';
+import 'package:freshio/frontend/screens/recipe_detail_page.dart';
+import 'package:freshio/core/utils/donation_helper.dart';
 import 'package:freshio/frontend/widgets/smart_assistant.dart';
 
 class HomePage extends StatefulWidget {
@@ -20,349 +23,355 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  late final AnimationController _headerController;
-  late final Animation<double> _headerFade;
-  late final Animation<Offset> _headerSlide;
-  late final AnimationController _statsController;
+  late final AnimationController _staggerController;
   final ScrollController _scrollController = ScrollController();
-
   String _userName = '';
 
-  String? _currentAssistantMsg;
-  IconData? _currentAssistantIcon;
-  String _lastAssistantMsg = '';
-  DateTime? _lastAssistantTime;
-  bool _welcomeShown = false;
-  double _scrollOffset = 0.0;
+  String? _assistantMsg;
+  IconData? _assistantIcon;
+  RecipeMatch? _suggestionRecipe;
 
   @override
   void initState() {
     super.initState();
-    _headerController = AnimationController(
+    _staggerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 1200),
     );
-    _headerFade = CurvedAnimation(parent: _headerController, curve: Curves.easeOut);
-    _headerSlide = Tween<Offset>(
-      begin: const Offset(0, 0.05),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _headerController, curve: Curves.easeOut));
-
-    _statsController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-
-    _headerController.forward();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) _statsController.forward();
-    });
-
-    _scrollController.addListener(_onScroll);
+    _staggerController.forward();
     _loadName();
   }
 
-  void _onScroll() {
-    if (mounted) {
-      setState(() {
-        _scrollOffset = _scrollController.offset;
-      });
-    }
-  }
-
   Future<void> _loadName() async {
-    final prefs = await SharedPreferences.getInstance();
+    final storage = StorageService();
     if (mounted) {
       setState(() {
-        _userName = prefs.getString('user_name') ?? 'Friend';
+        _userName = storage.getString('user_name') ?? 'Chef';
       });
     }
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_onScroll);
+    _staggerController.dispose();
     _scrollController.dispose();
-    _headerController.dispose();
-    _statsController.dispose();
     super.dispose();
   }
 
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good Morning ☀️';
-    if (h < 17) return 'Good Afternoon 🌤️';
-    return 'Good Evening 🌙';
-  }
+  void _generateIntelligence(List<Item> items, RecipeProvider recipeProvider) {
+    if (_assistantMsg != null) return;
 
-  Route _createRoute(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(1.0, 0.0);
-        const end = Offset.zero;
-        const curve = Curves.easeOut;
-        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(position: animation.drive(tween), child: child),
-        );
-      },
-      transitionDuration: const Duration(milliseconds: 300),
-    );
-  }
-
-  void _checkAssistantContext(InventoryProvider inventory, RecipeProvider recipe) {
-    if (_currentAssistantMsg != null) return;
-
-    String? newMsg;
-    IconData newIcon = Icons.info_outline_rounded;
-
-    final expiring = inventory.items.where((e) => e.expiry.difference(DateTime.now()).inDays <= 1 && !e.isWaste).toList();
-
+    final expiring = items.where((e) => !e.isWaste && InventoryProvider.isExpiringSoon(e)).toList();
+    
     if (expiring.isNotEmpty) {
-      newMsg = "Use these items before they expire ⏰";
-      newIcon = Icons.timer_rounded;
-    } else if (inventory.items.isEmpty) {
-      newMsg = "Add your first item 🥦";
-      newIcon = Icons.add_circle_outline_rounded;
-    } else {
-      final recipes = recipe.getSmartRecipes(inventory.items);
-      if (recipes.isEmpty) {
-        newMsg = "Check recipe suggestions 🍳";
-        newIcon = Icons.restaurant_rounded;
-      } else if (!_welcomeShown) {
-        newMsg = "Welcome to your smart guide 🌱";
-        newIcon = Icons.waving_hand_rounded;
-        _welcomeShown = true;
-      }
-    }
+      final matches = recipeProvider.getSmartRecipes(items);
+      final topMatch = matches.isNotEmpty ? matches.first : null;
 
-    if (newMsg != null) {
-      if (newMsg == _lastAssistantMsg && _lastAssistantTime != null) {
-        if (DateTime.now().difference(_lastAssistantTime!).inSeconds < 30) return;
+      if (topMatch != null && topMatch.hasExpiring) {
+        _assistantMsg = "Use your expiring ${expiring.first.name} for ${topMatch.recipe.name}! 🥘";
+        _assistantIcon = Icons.auto_awesome_rounded;
+        _suggestionRecipe = topMatch;
+      } else {
+        _assistantMsg = "You have ${expiring.length} items expiring soon. Use them now! ⚠️";
+        _assistantIcon = Icons.timer_rounded;
       }
-      
-      setState(() {
-        _currentAssistantMsg = newMsg;
-        _currentAssistantIcon = newIcon;
-      });
+    } else if (items.isEmpty) {
+      _assistantMsg = "Your pantry is empty. Let's add some items! 🛒";
+      _assistantIcon = Icons.shopping_basket_rounded;
     }
+    
+    if (mounted && _assistantMsg != null) setState(() {});
+  }
+
+  void _showDonationSheet(BuildContext context, List<Item> items, ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Donate Items 🌍', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: items.isEmpty
+                  ? Center(child: Text('No items eligible for donation', style: TextStyle(color: Colors.grey.shade400)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(24),
+                      itemCount: items.length,
+                      itemBuilder: (context, i) {
+                        final item = items[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.grey.shade100),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.name ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text('Expires in ${item.expiry.difference(DateTime.now()).inDays} days', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                  ],
+                                ),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  DonationHelper.openDonationLink(context, item);
+                                },
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                child: const Text('Donate'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<InventoryProvider>(context);
-    final recipeProvider = Provider.of<RecipeProvider>(context);
-    final items = provider.items;
-    final screen = MediaQuery.of(context).size;
-
-    final int totalItems = items.length;
-    final int expiring = items.where((e) => e.expiry.difference(DateTime.now()).inDays <= 1 && !e.isWaste).length;
-    final recipes = recipeProvider.getSmartRecipes(items);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAssistantContext(provider, recipeProvider);
-    });
-
+    final theme = Theme.of(context);
+    
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      body: Stack(
-        children: [
-          SafeArea(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RepaintBoundary(
-                    child: FadeTransition(
-                      opacity: _headerFade,
-                      child: SlideTransition(
-                        position: _headerSlide,
-                        child: _buildHeader(screen),
+      backgroundColor: theme.colorScheme.surface,
+      body: Consumer2<InventoryProvider, RecipeProvider>(
+        builder: (context, inventory, recipes, child) {
+          final items = inventory.items;
+          final smartRecipes = recipes.getSmartRecipes(items).take(3).toList();
+          final expiring = items.where((e) => !e.isWaste && InventoryProvider.isExpiringSoon(e)).toList();
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _generateIntelligence(items, recipes);
+          });
+
+          return Stack(
+            children: [
+              CustomScrollView(
+                controller: _scrollController,
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // APPBAR
+                  SliverAppBar(
+                    expandedHeight: 0,
+                    floating: true,
+                    backgroundColor: theme.colorScheme.surface,
+                    elevation: 0,
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_none_rounded, size: 28),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ),
+
+                  // HEADER
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Welcome back,', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey)),
+                          Text('${_userName ?? 'Chef'} 👋', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1)),
+                        ],
                       ),
                     ),
                   ),
-                  RepaintBoundary(child: _buildSearchBar()),
-                  const SizedBox(height: 24),
-                  RepaintBoundary(child: _buildDashboardGrid(context, totalItems, expiring, recipes.length)),
-                  const SizedBox(height: 32),
+
+                  // STATS
+                  SliverToBoxAdapter(
+                    child: Container(
+                      height: 140,
+                      margin: const EdgeInsets.symmetric(vertical: 16),
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        physics: const BouncingScrollPhysics(),
+                        children: [
+                          _StatCard(
+                            label: 'Items',
+                            value: items.length.toString(),
+                            icon: Icons.inventory_2_rounded,
+                            color: theme.colorScheme.primary,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryPage())),
+                          ),
+                          _StatCard(
+                            label: 'Expiring',
+                            value: inventory.expiringSoonItems.length.toString(),
+                            icon: Icons.timer_rounded,
+                            color: Colors.orangeAccent,
+                            onTap: () {
+                              _scrollController.animateTo(
+                                400,
+                                duration: const Duration(milliseconds: 500),
+                                curve: Curves.easeOut,
+                              );
+                            },
+                          ),
+                          _StatCard(
+                            label: 'Donations',
+                            value: inventory.donatableItems.length.toString(),
+                            icon: Icons.volunteer_activism_rounded,
+                            color: Colors.teal,
+                            onTap: () => _showDonationSheet(context, inventory.donatableItems, theme),
+                          ),
+                          _StatCard(
+                            label: 'Efficiency',
+                            value: '${inventory.items.isEmpty ? 100 : (100 - (inventory.items.where((i) => i.isWaste).length / inventory.items.length * 100)).toInt()}%',
+                            icon: Icons.eco_rounded,
+                            color: Colors.indigo,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsPage())),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TextButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsPage())),
+                        icon: const Icon(Icons.analytics_outlined, size: 18),
+                        label: const Text('View Detailed Analytics', style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          backgroundColor: theme.colorScheme.primary.withOpacity(0.05),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ASSISTANT (INLINE)
+                  if (_assistantMsg != null)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                        child: _PremiumAssistantCard(
+                          message: _assistantMsg!,
+                          icon: _assistantIcon!,
+                          onTap: _suggestionRecipe != null 
+                              ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeDetailPage(recipe: _suggestionRecipe!.recipe)))
+                              : null,
+                          onDismiss: () => setState(() => _assistantMsg = null),
+                        ),
+                      ),
+                    ),
+
+                  // SMART RECIPES
+                  if (smartRecipes.isNotEmpty) ...[
+                    _SectionHeader(title: 'Top Matches for You', onSeeAll: () {}),
+                    SliverToBoxAdapter(
+                      child: Container(
+                        height: 220,
+                        margin: const EdgeInsets.only(top: 8),
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: smartRecipes.length,
+                          itemBuilder: (context, index) => _SmallRecipeCard(match: smartRecipes[index]),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // SMART FOOD ACTIONS
+                  _SectionHeader(title: 'Smart Food Actions', onSeeAll: () {}),
+                  
+                  // EXPIRING SOON SECTION
+                  if (inventory.expiringSoonItems.isNotEmpty) ...[
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                        child: Text('🚨 USE THESE SOON', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final item = inventory.expiringSoonItems[index];
+                            final matches = recipes.getSmartRecipes([item]);
+                            final bestRecipe = matches.isNotEmpty ? matches.first.recipe : null;
+                            
+                            return _SmartActionCard(
+                              item: item,
+                              type: SmartActionType.recipe,
+                              suggestion: bestRecipe?.name,
+                              onTap: bestRecipe != null 
+                                  ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeDetailPage(recipe: bestRecipe)))
+                                  : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecipePage())),
+                            );
+                          },
+                          childCount: inventory.expiringSoonItems.length,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // DONATE SECTION
+                  if (inventory.donatableItems.isNotEmpty) ...[
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        child: Text('🤝 ELIGIBLE FOR DONATION', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final item = inventory.donatableItems[index];
+                            return _SmartActionCard(
+                              item: item,
+                              type: SmartActionType.donation,
+                              onTap: () => DonationHelper.openDonationLink(context, item),
+                            );
+                          },
+                          childCount: inventory.donatableItems.length,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
-            ),
-          ),
-          if (_currentAssistantMsg != null)
-            SmartAssistant(
-              message: _currentAssistantMsg!,
-              icon: _currentAssistantIcon ?? Icons.info,
-              onDismiss: () {
-                setState(() {
-                  _lastAssistantMsg = _currentAssistantMsg!;
-                  _lastAssistantTime = DateTime.now();
-                  _currentAssistantMsg = null;
-                });
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(Size screen) {
-    final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
-
-    return Padding(
-      padding: EdgeInsets.all(screen.width * 0.05),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              primary,
-              primary.withValues(alpha: 0.8),
             ],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: primary.withValues(alpha: 0.2),
-              blurRadius: 12,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _greeting(),
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Hello, $_userName 👋',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "Let’s reduce food waste today 🌱",
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: 'Search food or recipes...',
-            prefixIcon: Icon(Icons.search_rounded, color: theme.colorScheme.primary),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 15),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDashboardGrid(BuildContext context, int total, int expiring, int recipesCount) {
-    final screen = MediaQuery.of(context).size;
-    
-    final cards = [
-      _DashboardCardData(
-        title: 'Inventory',
-        badge: '$total items',
-        icon: Icons.inventory_2_rounded,
-        color: Theme.of(context).colorScheme.primary,
-        page: const InventoryPage(),
-      ),
-      _DashboardCardData(
-        title: 'Recipes',
-        badge: '$recipesCount suggestions',
-        icon: Icons.restaurant_rounded,
-        color: Colors.orangeAccent,
-        page: RecipePage(),
-      ),
-      _DashboardCardData(
-        title: 'Analytics',
-        badge: 'View insights',
-        icon: Icons.bar_chart_rounded,
-        color: Colors.purpleAccent,
-        page: const AnalyticsPage(),
-      ),
-      _DashboardCardData(
-        title: 'Shopping List',
-        badge: 'Manage items',
-        icon: Icons.shopping_cart_rounded,
-        color: Colors.teal,
-        page: const ShoppingListPage(),
-      ),
-      _DashboardCardData(
-        title: 'Expiry Tracker',
-        badge: '$expiring expiring',
-        icon: Icons.timer_rounded,
-        color: Colors.redAccent,
-        page: const InventoryPage(),
-      ),
-      _DashboardCardData(
-        title: 'Profile',
-        badge: 'Your account',
-        icon: Icons.person_rounded,
-        color: Colors.blueAccent,
-        page: const ProfilePage(),
-      ),
-    ];
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: screen.width * 0.05),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: cards.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.9,
-        ),
-        itemBuilder: (context, index) {
-          return _Dashboard3DCard(
-            data: cards[index],
-            index: index,
-            controller: _statsController,
-            scrollOffset: _scrollOffset,
-            onTap: () => Navigator.push(context, _createRoute(cards[index].page)),
           );
         },
       ),
@@ -370,218 +379,254 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 }
 
-class _DashboardCardData {
-  final String title;
-  final String badge;
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
   final IconData icon;
   final Color color;
-  final Widget page;
-
-  _DashboardCardData({
-    required this.title,
-    required this.badge,
-    required this.icon,
-    required this.color,
-    required this.page,
-  });
-}
-
-class _Dashboard3DCard extends StatefulWidget {
-  final _DashboardCardData data;
-  final int index;
-  final AnimationController controller;
-  final double scrollOffset;
   final VoidCallback onTap;
 
-  const _Dashboard3DCard({
-    required this.data,
-    required this.index,
-    required this.controller,
-    required this.scrollOffset,
-    required this.onTap,
-  });
+  const _StatCard({required this.label, required this.value, required this.icon, required this.color, required this.onTap});
 
   @override
-  State<_Dashboard3DCard> createState() => _Dashboard3DCardState();
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 130,
+        margin: const EdgeInsets.only(right: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: color.withOpacity(0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const Spacer(),
+            Text(value ?? '0', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+            Text(label ?? '', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _Dashboard3DCardState extends State<_Dashboard3DCard> {
-  bool _isPressed = false;
+class _PremiumAssistantCard extends StatelessWidget {
+  final String message;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final VoidCallback onDismiss;
+
+  const _PremiumAssistantCard({required this.message, required this.icon, this.onTap, required this.onDismiss});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
-    // Staggered entry
-    final animation = CurvedAnimation(
-      parent: widget.controller,
-      curve: Interval(
-        (widget.index * 0.08).clamp(0.0, 1.0),
-        ((widget.index * 0.08) + 0.4).clamp(0.0, 1.0),
-        curve: Curves.easeOut,
-      ),
-    );
-
-    // Parallax effect calculations
-    // Slightly shift the inner content based on scroll position
-    final parallaxOffset = Offset(0, (widget.scrollOffset * 0.08) % 15 - 7.5);
-
-    // Glow interaction
-    final shadowColor = _isPressed 
-        ? widget.data.color.withValues(alpha: 0.3) 
-        : widget.data.color.withValues(alpha: 0.15);
-    final blurRadius = _isPressed ? 20.0 : 15.0;
-
-    // 3D Matrix
-    final matrix = Matrix4.identity()
-      ..setEntry(3, 2, 0.001)
-      ..rotateX(_isPressed ? 0.05 : 0.02)
-      ..rotateY(_isPressed ? -0.05 : -0.02);
-
-    return FadeTransition(
-      opacity: animation,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(animation),
-        child: GestureDetector(
-          onTapDown: (_) => setState(() => _isPressed = true),
-          onTapUp: (_) {
-            HapticFeedback.mediumImpact(); // Stronger feedback on interaction
-            setState(() => _isPressed = false);
-            widget.onTap();
-          },
-          onTapCancel: () => setState(() => _isPressed = false),
-          child: AnimatedScale(
-            scale: _isPressed ? 0.96 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOutBack,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              transform: matrix,
-              transformAlignment: FractionalOffset.center,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: shadowColor,
-                    blurRadius: blurRadius,
-                    offset: const Offset(2, 6),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 5,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-                border: Border.all(
-                  color: _isPressed 
-                      ? widget.data.color.withValues(alpha: 0.15) 
-                      : widget.data.color.withValues(alpha: 0.05),
-                ),
-              ),
-              child: Stack(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: theme.colorScheme.primary.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 32),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Subdued background gradient or pattern (Background layer)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            widget.data.color.withValues(alpha: 0.03),
-                            theme.colorScheme.surface,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  
-                  // Top layer (Icon + Text) with Parallax
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Transform.translate(
-                      offset: parallaxOffset,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Icon container with slight glow
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: widget.data.color.withValues(alpha: _isPressed ? 0.15 : 0.1),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                if (_isPressed)
-                                  BoxShadow(
-                                    color: widget.data.color.withValues(alpha: 0.2),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
-                                  ),
-                              ],
-                            ),
-                            child: Icon(widget.data.icon, color: widget.data.color, size: 28),
-                          ),
-                          
-                          // Text and Badges
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.data.title,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  color: theme.colorScheme.onSurface,
-                                  letterSpacing: -0.5,
-                                  shadows: [
-                                    Shadow(
-                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.05),
-                                      blurRadius: 2,
-                                      offset: const Offset(0, 1),
-                                    ),
-                                  ],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 8),
-                              
-                              // Badge / Pill
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: widget.data.color.withValues(alpha: _isPressed ? 0.15 : 0.08),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: widget.data.color.withValues(alpha: _isPressed ? 0.2 : 0.05),
-                                  ),
-                                ),
-                                child: Text(
-                                  widget.data.badge,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: widget.data.color,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const Text('SMART INSIGHT', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  const SizedBox(height: 4),
+                  Text(message ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
                 ],
               ),
             ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: onDismiss,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final VoidCallback onSeeAll;
+
+  const _SectionHeader({required this.title, required this.onSeeAll});
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(title ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            TextButton(onPressed: onSeeAll, child: const Text('See All')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallRecipeCard extends StatelessWidget {
+  final RecipeMatch match;
+
+  const _SmallRecipeCard({required this.match});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeDetailPage(recipe: match.recipe))),
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.network(
+                match.recipe.image,
+                height: 140,
+                width: 160,
+                fit: BoxFit.cover,
+                errorBuilder: (context, _, __) => Container(color: Colors.grey.shade200),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(match.recipe.name ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('${(match.matchPercentage * 100).toInt()}% Match', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum SmartActionType { recipe, donation }
+
+class _SmartActionCard extends StatelessWidget {
+  final Item item;
+  final SmartActionType type;
+  final String? suggestion;
+  final VoidCallback onTap;
+
+  const _SmartActionCard({
+    required this.item,
+    required this.type,
+    this.suggestion,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isRecipe = type == SmartActionType.recipe;
+    final color = isRecipe ? theme.colorScheme.primary : Colors.teal;
+    final days = item.expiry.difference(DateTime.now()).inDays;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(color: color.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+            child: Icon(isRecipe ? Icons.restaurant_menu_rounded : Icons.volunteer_activism_rounded, color: color, size: 24),
           ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.name ?? '', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                const SizedBox(height: 4),
+                if (isRecipe)
+                  Text(
+                    suggestion != null ? 'Use for: $suggestion' : 'Suggest a recipe...',
+                    style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                  )
+                else
+                  const Text('Available for donation', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.w600, fontSize: 13)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                days == 0 ? 'Today' : '$days days left',
+                style: TextStyle(color: days <= 2 ? Colors.red : Colors.grey, fontWeight: FontWeight.w900, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              _ActionButton(
+                label: isRecipe ? 'USE' : 'DONATE',
+                color: color,
+                onTap: onTap,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(color: color.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5),
         ),
       ),
     );

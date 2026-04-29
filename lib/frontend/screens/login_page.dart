@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:freshio/core/theme/app_theme.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:freshio/providers/user_provider.dart';
+import 'package:freshio/data/services/storage_service.dart';
+import 'profile_setup_page.dart';
 import 'forgot_password_page.dart';
 import '../navigation/main_navigation.dart';
-
-//////////////////////////////////////////////////////////////
-// 🔐 LOGIN PAGE
-//////////////////////////////////////////////////////////////
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -66,20 +65,26 @@ class _LoginPageState extends State<LoginPage>
     }
 
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    final name  = email.split('@').first;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_name',  name);
-    await prefs.setString('user_email', email);
+    
+    // Simulate network
+    await Future.delayed(const Duration(milliseconds: 1000));
 
     if (!mounted) return;
+    
+    final name = email.split('@').first;
+    final userProvider = context.read<UserProvider>();
+    await userProvider.login(email, name);
+
     setState(() => _isLoading = false);
+
+    Widget nextPage = userProvider.isFirstTimeUser 
+        ? const ProfileSetupPage() 
+        : const MainNavigation();
 
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, a, __) => const MainNavigation(),
+        pageBuilder: (_, a, __) => nextPage,
         transitionsBuilder: (_, anim, __, child) =>
             FadeTransition(opacity: anim, child: child),
       ),

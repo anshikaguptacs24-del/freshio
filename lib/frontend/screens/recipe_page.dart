@@ -34,6 +34,11 @@ class _RecipePageState extends State<RecipePage> with SingleTickerProviderStateM
       duration: const Duration(milliseconds: 600),
     );
     _listController.forward();
+    
+    // Lazy fetch
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RecipeProvider>().fetchRecipes();
+    });
   }
 
   @override
@@ -249,14 +254,18 @@ class _RecipePageState extends State<RecipePage> with SingleTickerProviderStateM
 
     // Apply filtering efficiently
     final filteredMatches = matches.where((m) {
-      final matchesSearch = _searchQuery.isEmpty || m.recipe.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesCategory = _selectedCategory == 'All' || m.recipe.name.toLowerCase().contains(_selectedCategory.toLowerCase());
+      final name = (m.recipe.name ?? '').toLowerCase();
+      final query = (_searchQuery ?? '').toLowerCase();
+      final category = (_selectedCategory ?? 'All').toLowerCase();
+      
+      final matchesSearch = query.isEmpty || name.contains(query);
+      final matchesCategory = category == 'all' || name.contains(category);
       return matchesSearch && matchesCategory;
     }).toList();
 
     // Apply Sorting
     if (_selectedSort == 'Name') {
-      filteredMatches.sort((a, b) => a.recipe.name.compareTo(b.recipe.name));
+      filteredMatches.sort((a, b) => (a.recipe.name ?? '').compareTo(b.recipe.name ?? ''));
     } else {
       filteredMatches.sort((a, b) => b.score.compareTo(a.score));
     }
@@ -434,30 +443,6 @@ class _RecipeCard extends StatefulWidget {
 
 class _RecipeCardState extends State<_RecipeCard> {
   bool _isPressed = false;
-  double _scrollOffset = 0.0;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    widget.scrollController.removeListener(_onScroll);
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (mounted) {
-      final newOffset = widget.scrollController.offset;
-      if ((newOffset - _scrollOffset).abs() > 2) {
-        setState(() {
-          _scrollOffset = newOffset;
-        });
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -524,11 +509,18 @@ class _RecipeCardState extends State<_RecipeCard> {
                       width: double.infinity,
                       child: Stack(
                         children: [
-                          Transform.translate(
-                            offset: Offset(0, (_scrollOffset * 0.05) % 30 - 15),
+                          AnimatedBuilder(
+                            animation: widget.scrollController,
+                            builder: (context, child) {
+                              final offset = widget.scrollController.hasClients ? widget.scrollController.offset : 0.0;
+                              return Transform.translate(
+                                offset: Offset(0, (offset * 0.05) % 30 - 15),
+                                child: child,
+                              );
+                            },
                             child: Hero(
                               tag: 'recipe_image_${widget.recipe.name}',
-                              child: _buildImage(widget.recipe.image, theme),
+                              child: _buildImage(widget.recipe.image ?? '', theme),
                             ),
                           ),
                           Container(

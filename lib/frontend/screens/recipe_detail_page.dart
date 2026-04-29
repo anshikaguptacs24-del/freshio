@@ -256,7 +256,7 @@ class _IngredientTile extends StatelessWidget {
 
     // Matching logic
     final matchingItems = items
-        .where((i) => !i.isWaste && i.name.toLowerCase().contains(ingredient.toLowerCase()))
+        .where((i) => !i.isWaste && (i.name ?? '').toLowerCase().contains((ingredient ?? '').toLowerCase()))
         .toList();
 
     final validItems = matchingItems.where((i) => !InventoryProvider.isExpired(i)).toList();
@@ -301,7 +301,7 @@ class _IngredientTile extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    ingredient,
+                    (ingredient ?? ''),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -386,7 +386,7 @@ class _StepTile extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  step,
+                  (step ?? ''),
                   style: const TextStyle(
                     fontSize: 14,
                     height: 1.5,

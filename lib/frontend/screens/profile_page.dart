@@ -1,6 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:freshio/core/theme/app_theme.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freshio/core/constants/app_constants.dart';
+import 'package:provider/provider.dart';
+import 'package:freshio/providers/user_provider.dart';
+import 'package:image_picker/image_picker.dart';
 import 'login_page.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -10,67 +15,17 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage>
-    with SingleTickerProviderStateMixin {
-  String _name = '';
-  String _email = '';
-  String _diet = '';
-  String _storage = '';
-  String _age = '';
-  String _household = '';
-
+class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStateMixin {
   late AnimationController _avatarController;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
     _avatarController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-  }
-
-  Future<void> _loadProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _name = prefs.getString('user_name') ?? 'User';
-      _email = prefs.getString('user_email') ?? 'user@freshio.app';
-      _diet = prefs.getString('user_diet') ?? '';
-      _storage = prefs.getString('user_storage') ?? '';
-      _age = prefs.getString('user_age') ?? '';
-      _household = prefs.getString('user_household') ?? '';
-    });
-  }
-
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_name');
-    await prefs.remove('user_email');
-
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      _createRoute(const LoginPage()),
-      (route) => false,
-    );
-  }
-
-  Route _createRoute(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(1.0, 0.0);
-        const end = Offset.zero;
-        const curve = Curves.easeOutCubic;
-        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(position: animation.drive(tween), child: child),
-        );
-      },
-      transitionDuration: const Duration(milliseconds: 400),
-    );
   }
 
   @override
@@ -79,21 +34,203 @@ class _ProfilePageState extends State<ProfilePage>
     super.dispose();
   }
 
+  Future<void> _pickImage() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      if (!mounted) return;
+      context.read<UserProvider>().updateProfilePhoto(image.path);
+    }
+  }
+
+  Future<void> _logout() async {
+    await context.read<UserProvider>().logout();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+  void _showEditProfileDialog(BuildContext context, UserProvider user) {
+    final nameCtrl = TextEditingController(text: user.userName);
+    final ageCtrl = TextEditingController(text: user.userAge);
+    String diet = AppConstants.dietOptions.contains(user.userDiet) ? user.userDiet : 'Other';
+    final otherDietCtrl = TextEditingController(text: diet == 'Other' ? user.userDiet : '');
+    String storage = user.userStorage;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          title: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.w900)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTextField(nameCtrl, 'Full Name', Icons.person_outline),
+                _buildTextField(ageCtrl, 'Age', Icons.calendar_today_outlined, isNumber: true),
+                _buildDietDropdown(
+                  currentDiet: diet,
+                  onChanged: (v) => setDialogState(() => diet = v!),
+                  otherController: otherDietCtrl,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(TextEditingController(text: storage), 'Storage Preference', Icons.kitchen_outlined, 
+                  onChanged: (v) => storage = v),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final finalDiet = diet == 'Other' ? otherDietCtrl.text : diet;
+                user.completeProfile(
+                  name: nameCtrl.text,
+                  age: ageCtrl.text,
+                  diet: finalDiet,
+                  storage: storage,
+                  householdSize: (user.familyMembers.length + 1).toString(),
+                );
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Save Changes', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddMemberDialog(BuildContext context, {FamilyMember? existingMember}) {
+    final nameCtrl = TextEditingController(text: existingMember?.name);
+    final ageCtrl = TextEditingController(text: existingMember?.age);
+    String diet = existingMember != null 
+        ? (AppConstants.dietOptions.contains(existingMember.diet) ? existingMember.diet : 'Other')
+        : 'Vegetarian';
+    final otherDietCtrl = TextEditingController(text: (existingMember != null && diet == 'Other') ? existingMember.diet : '');
+    final allergiesCtrl = TextEditingController(text: existingMember?.allergies.join(', '));
+    final medicalCtrl = TextEditingController(text: existingMember?.medical);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          title: Text(existingMember == null ? 'Add Family Member' : 'Edit Member', style: const TextStyle(fontWeight: FontWeight.w900)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTextField(nameCtrl, 'Name', Icons.person_outline),
+                _buildTextField(ageCtrl, 'Age', Icons.calendar_today_outlined, isNumber: true),
+                _buildDietDropdown(
+                  currentDiet: diet,
+                  onChanged: (v) => setDialogState(() => diet = v!),
+                  otherController: otherDietCtrl,
+                ),
+                _buildTextField(allergiesCtrl, 'Allergies (comma separated)', Icons.warning_amber_rounded),
+                _buildTextField(medicalCtrl, 'Medical (optional)', Icons.medical_services_outlined),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.isEmpty) return;
+                final finalDiet = diet == 'Other' ? otherDietCtrl.text : diet;
+                final member = FamilyMember(
+                  id: existingMember?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: nameCtrl.text,
+                  age: ageCtrl.text,
+                  diet: finalDiet,
+                  allergies: allergiesCtrl.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+                  medical: medicalCtrl.text.isEmpty ? null : medicalCtrl.text,
+                );
+                if (existingMember == null) {
+                  context.read<UserProvider>().addFamilyMember(member);
+                } else {
+                  context.read<UserProvider>().updateFamilyMember(member);
+                }
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text(existingMember == null ? 'Add' : 'Save', style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildTextField(TextEditingController ctrl, String label, IconData icon, {bool isNumber = false, Function(String)? onChanged}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: ctrl,
+        onChanged: onChanged,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, size: 20),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildDietDropdown({required String currentDiet, required ValueChanged<String?> onChanged, required TextEditingController otherController}) {
+    return Column(
+      children: [
+        DropdownButtonFormField<String>(
+          value: currentDiet,
+          items: AppConstants.dietOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            labelText: 'Dietary Preference',
+            prefixIcon: const Icon(Icons.restaurant_menu_rounded, size: 20),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+        if (currentDiet == 'Other') ...[
+          const SizedBox(height: 12),
+          TextField(
+            controller: otherController,
+            decoration: InputDecoration(
+              labelText: 'Specify Diet',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.of(context).size;
+    final userProvider = Provider.of<UserProvider>(context);
     final theme = Theme.of(context);
-    final initials = _name.isNotEmpty
-        ? _name.trim().split(' ').map((w) => w[0].toUpperCase()).take(2).join()
-        : 'U';
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
+          // 👤 PROFILE HEADER
           SliverAppBar(
-            expandedHeight: 280,
+            expandedHeight: 260,
             pinned: true,
             backgroundColor: theme.colorScheme.primary,
             flexibleSpace: FlexibleSpaceBar(
@@ -102,170 +239,57 @@ class _ProfilePageState extends State<ProfilePage>
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      theme.colorScheme.primary,
-                      theme.colorScheme.primary.withValues(alpha: 0.8),
-                    ],
+                    colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
                   ),
                 ),
-                child: Center(
+                child: SafeArea(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 40),
-                      AnimatedBuilder(
-                        animation: _avatarController,
-                        builder: (context, child) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.white.withValues(alpha: 0.3 * _avatarController.value),
-                                  blurRadius: 20 * _avatarController.value,
-                                  spreadRadius: 10 * _avatarController.value,
-                                ),
-                              ],
-                            ),
-                            child: Transform.scale(
-                              scale: 1.0 + (0.03 * _avatarController.value),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: CircleAvatar(
-                          radius: 55,
-                          backgroundColor: Colors.white.withValues(alpha: 0.2),
-                          child: CircleAvatar(
-                            radius: 50,
-                            backgroundColor: theme.colorScheme.secondary,
-                            child: Text(
-                              initials,
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      const SizedBox(height: 10),
+                      _buildAvatar(userProvider, theme),
                       const SizedBox(height: 16),
-                      Text(
-                        _name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        _email,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      Text(userProvider.userName, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+                      Text(userProvider.userEmail, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14)),
+                      const SizedBox(height: 12),
+                      _EditButton(onTap: () => _showEditProfileDialog(context, userProvider)),
                     ],
                   ),
                 ),
               ),
             ),
           ),
+
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            padding: const EdgeInsets.all(24),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                if (_diet.isNotEmpty || _age.isNotEmpty) ...[
-                  _buildSectionTitle(theme, 'My Profile'),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                      border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.05)),
-                    ),
-                    child: Column(
-                      children: [
-                        if (_age.isNotEmpty)
-                          _InfoRow(Icons.cake_outlined, 'Age', _age, theme.colorScheme.primary),
-                        if (_diet.isNotEmpty)
-                          _InfoRow(Icons.restaurant_menu_rounded, 'Diet', _diet, theme.colorScheme.secondary),
-                        if (_storage.isNotEmpty)
-                          _InfoRow(Icons.kitchen_rounded, 'Storage', _storage, Colors.orangeAccent),
-                        if (_household.isNotEmpty)
-                          _InfoRow(Icons.group_outlined, 'Household', '$_household people', Colors.blueAccent),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-                _buildSectionTitle(theme, 'Account Settings'),
+                // 👨‍👩‍👧‍👦 FAMILY MEMBERS
+                _SectionTitle(title: 'Family Members', onAdd: () => _showAddMemberDialog(context)),
                 const SizedBox(height: 16),
-                _SettingsTile(
-                  icon: Icons.notifications_none_rounded,
-                  title: 'Notifications',
-                  subtitle: 'Expiry alerts & more',
-                  onTap: () {},
-                ),
-                _SettingsTile(
-                  icon: Icons.lock_outline_rounded,
-                  title: 'Privacy & Security',
-                  subtitle: 'Manage your data',
-                  onTap: () {},
-                ),
+                if (userProvider.familyMembers.isEmpty)
+                  _EmptyState(message: 'No members added yet', icon: Icons.group_add_outlined)
+                else
+                  ...userProvider.familyMembers.map((m) => _MemberCard(
+                    member: m,
+                    onEdit: () => _showAddMemberDialog(context, existingMember: m),
+                    onDelete: () => userProvider.deleteFamilyMember(m.id),
+                  )),
+
                 const SizedBox(height: 32),
-                _buildSectionTitle(theme, 'Support'),
+                
+                // ⚙️ PREFERENCES
+                const Text('Preferences', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 1)),
                 const SizedBox(height: 16),
-                _SettingsTile(
-                  icon: Icons.help_outline_rounded,
-                  title: 'Help Center',
-                  subtitle: 'Get assistance',
-                  onTap: () {},
-                ),
-                _SettingsTile(
-                  icon: Icons.info_outline_rounded,
-                  title: 'About Freshio',
-                  subtitle: 'Version 1.0.0',
-                  onTap: () {},
-                ),
+                _InfoTile(label: 'My Diet', value: userProvider.userDiet, icon: Icons.restaurant_menu_rounded, color: AppConstants.getDietColor(userProvider.userDiet)),
+                _InfoTile(label: 'Storage', value: userProvider.userStorage, icon: Icons.kitchen_rounded, color: Colors.orange),
+                _InfoTile(label: 'Household Size', value: '${userProvider.familyMembers.length + 1} People', icon: Icons.house_rounded, color: Colors.blue),
+
                 const SizedBox(height: 48),
-                _MicroInteraction(
-                  onTap: _logout,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.red.withValues(alpha: 0.1)),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
-                        SizedBox(width: 10),
-                        Text(
-                          'Logout',
-                          style: TextStyle(
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 60),
+
+                // 🚪 ACCOUNT
+                _LogoutButton(onTap: _logout),
+                const SizedBox(height: 80),
               ]),
             ),
           ),
@@ -274,160 +298,215 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildSectionTitle(ThemeData theme, String title) {
-    return Text(
-      title,
-      style: theme.textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w900,
-        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-        letterSpacing: 1.2,
-        fontSize: 12,
+  Widget _buildAvatar(UserProvider user, ThemeData theme) {
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Stack(
+        alignment: Alignment.bottomRight,
+        children: [
+          CircleAvatar(
+            radius: 54,
+            backgroundColor: Colors.white.withOpacity(0.2),
+            child: CircleAvatar(
+              radius: 50,
+              backgroundColor: theme.colorScheme.secondary,
+              backgroundImage: user.userPhoto != null ? FileImage(File(user.userPhoto!)) : null,
+              child: user.userPhoto == null 
+                  ? Text(user.userName.isNotEmpty ? user.userName[0].toUpperCase() : 'U', 
+                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white))
+                  : null,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            child: Icon(Icons.edit_rounded, size: 16, color: theme.colorScheme.primary),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _MicroInteraction extends StatefulWidget {
-  final Widget child;
+class _EditButton extends StatelessWidget {
   final VoidCallback onTap;
-
-  const _MicroInteraction({required this.child, required this.onTap});
-
-  @override
-  State<_MicroInteraction> createState() => _MicroInteractionState();
-}
-
-class _MicroInteractionState extends State<_MicroInteraction> {
-  bool _isPressed = false;
+  const _EditButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 150),
-        child: widget.child,
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)),
+        child: const Text('Edit Profile', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
       ),
     );
   }
 }
 
-class _SettingsTile extends StatelessWidget {
-  final IconData icon;
+class _SectionTitle extends StatelessWidget {
   final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback onAdd;
+  const _SectionTitle({required this.title, required this.onAdd});
 
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 1)),
+        IconButton(icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.grey, size: 20), onPressed: onAdd),
+      ],
+    );
+  }
+}
+
+class _MemberCard extends StatelessWidget {
+  final FamilyMember member;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _MemberCard({required this.member, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: _MicroInteraction(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
-            border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.05)),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: theme.colorScheme.onSurface.withOpacity(0.05)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+            child: Text(member.name[0].toUpperCase(), style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: theme.colorScheme.primary, size: 22),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(member.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    Text('${member.age} yrs', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 8),
+                    _DietChip(diet: member.diet),
                   ],
                 ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: Colors.grey.shade300),
-            ],
+                if (member.allergies.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text('Allergies: ${member.allergies.join(", ")}', style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.w600)),
+                ],
+              ],
+            ),
           ),
-        ),
+          IconButton(icon: const Icon(Icons.edit_outlined, size: 20), onPressed: onEdit),
+          IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent), onPressed: () {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Delete Member?'),
+                content: Text('Are you sure you want to remove ${member.name}?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  TextButton(onPressed: () { onDelete(); Navigator.pop(ctx); }, child: const Text('Delete', style: TextStyle(color: Colors.red))),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _InfoRow(this.icon, this.label, this.value, this.color);
+class _DietChip extends StatelessWidget {
+  final String diet;
+  const _DietChip({required this.diet});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    final color = AppConstants.getDietColor(diet);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+      child: Text(diet, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900)),
+    );
+  }
+}
+
+class _InfoTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _InfoTile({required this.label, required this.value, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
+          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 20)),
+          const SizedBox(width: 16),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          ]),
         ],
       ),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LogoutButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(color: Colors.red.withOpacity(0.05), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.red.withOpacity(0.1))),
+        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
+          SizedBox(width: 10),
+          Text('Logout Account', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 16)),
+        ]),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final String message;
+  final IconData icon;
+  const _EmptyState({required this.message, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(color: Colors.grey.withOpacity(0.05), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.withOpacity(0.1), style: BorderStyle.none)),
+      child: Column(children: [
+        Icon(icon, size: 48, color: Colors.grey.shade300),
+        const SizedBox(height: 12),
+        Text(message, style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.bold)),
+      ]),
     );
   }
 }

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:freshio/core/theme/app_theme.dart';
-import 'package:freshio/frontend/screens/profile_setup_page.dart';
+import 'package:freshio/frontend/screens/create_account_page.dart';
+import 'package:freshio/frontend/screens/login_page.dart';
 import 'package:freshio/frontend/navigation/main_navigation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 //////////////////////////////////////////////////////////////
 // 💫 SPLASH PAGE — checks isNewUser → routes accordingly
 //////////////////////////////////////////////////////////////
+
+import 'package:provider/provider.dart';
+import 'package:freshio/providers/inventory_provider.dart';
+import 'package:freshio/providers/user_provider.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -40,28 +44,40 @@ class _SplashPageState extends State<SplashPage>
     );
 
     _controller.forward();
-
-    // After splash delay → decide where to go
-    Future.delayed(const Duration(seconds: 3), _navigate);
+    _initializeApp();
   }
 
-  //////////////////////////////////////////////////////////////
-  // NAVIGATION LOGIC
-  //////////////////////////////////////////////////////////////
+  Future<void> _initializeApp() async {
+    // 1. Minimum animation time
+    final minTime = Future.delayed(const Duration(milliseconds: 1500));
+    
+    // 2. Load essential data
+    final inventoryLoad = context.read<InventoryProvider>().loadItems();
+    
+    // Wait for both
+    await Future.wait([minTime, inventoryLoad]);
+    
+    if (mounted) _navigate();
+  }
 
   Future<void> _navigate() async {
+    final userProvider = context.read<UserProvider>();
+    
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final isNewUser = prefs.getBool('isFirstTimeUser') ?? true;
-
-    if (!mounted) return;
+    Widget nextPage;
+    if (!userProvider.isLoggedIn) {
+      nextPage = const LoginPage();
+    } else if (userProvider.isFirstTimeUser) {
+      nextPage = const CreateAccountPage();
+    } else {
+      nextPage = const MainNavigation();
+    }
 
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, a, __) =>
-            isNewUser ? const ProfileSetupPage() : const MainNavigation(),
+        pageBuilder: (_, a, __) => nextPage,
         transitionsBuilder: (_, anim, __, child) =>
             FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 600),

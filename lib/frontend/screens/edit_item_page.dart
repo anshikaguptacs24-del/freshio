@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:freshio/data/models/item.dart';
+import 'package:freshio/core/constants/app_constants.dart';
 
 class EditItemPage extends StatefulWidget {
   final Item item;
@@ -22,6 +23,7 @@ class _EditItemPageState extends State<EditItemPage> {
   late TextEditingController nameController;
   late TextEditingController quantityController;
 
+  late String selectedUnit;
   DateTime? selectedDate;
 
   @override
@@ -31,6 +33,7 @@ class _EditItemPageState extends State<EditItemPage> {
     nameController = TextEditingController(text: widget.item.name);
     quantityController =
         TextEditingController(text: widget.item.quantity.toString());
+    selectedUnit = widget.item.unit;
 
     selectedDate = widget.item.expiry;
   }
@@ -59,11 +62,21 @@ class _EditItemPageState extends State<EditItemPage> {
   void save() {
     if (!_formKey.currentState!.validate()) return;
 
+    final name = nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final category = widget.item.category ?? 'General';
+    final unit = selectedUnit ?? 'pcs';
+
+    print("DEBUG category: $category");
+    print("DEBUG unit: $unit");
+
     final updated = Item(
-      name: nameController.text.trim(),
-      category: widget.item.category,
+      name: name,
+      category: category,
       expiry: selectedDate ?? widget.item.expiry,
       quantity: double.tryParse(quantityController.text) ?? 1,
+      unit: unit,
       isWaste: widget.item.isWaste,
     );
 
@@ -123,12 +136,37 @@ class _EditItemPageState extends State<EditItemPage> {
                 // QUANTITY
                 //////////////////////////////////////////////////
 
-                TextFormField(
-                  controller: quantityController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: "Quantity",
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        controller: quantityController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: "Quantity",
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: DropdownButtonFormField<String>(
+                        value: selectedUnit ?? 'pcs',
+                        decoration: const InputDecoration(
+                          labelText: "Unit",
+                        ),
+                        items: AppConstants.filteredUnits
+                            .map((u) => DropdownMenuItem(value: u, child: Text(u ?? '')))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() => selectedUnit = v);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 16),
@@ -151,7 +189,7 @@ class _EditItemPageState extends State<EditItemPage> {
                         Text(
                           selectedDate == null
                               ? "Select Expiry Date"
-                              : "${selectedDate!.toLocal()}".split(" ")[0],
+                              : "${(selectedDate?.toLocal() ?? '').toString().split(" ")[0]}",
                         ),
                         Icon(Icons.calendar_today, color: primary),
                       ],
