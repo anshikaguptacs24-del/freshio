@@ -104,4 +104,20 @@ class AppConstants {
 
     return 'General';
   }
+
+  static int estimateShelfLifeDays(String? name) {
+    final n = (name ?? '').toLowerCase();
+    if (n.isEmpty) return 4;
+
+    if (n.contains('milk')) return 3;
+    if (n.contains('cheese')) return 14;
+    if (n.contains('banana')) return 2;
+    if (n.contains('apple')) return 10;
+    if (n.contains('bread')) return 3;
+    if (n.contains('spinach')) return 2;
+    if (n.contains('meat') || n.contains('chicken')) return 2;
+    if (n.contains('rice') || n.contains('pasta')) return 180;
+
+    return 4; // Default
+  }
 }

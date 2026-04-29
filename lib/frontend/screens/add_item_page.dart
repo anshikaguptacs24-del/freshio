@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:freshio/core/constants/app_constants.dart';
 import 'package:freshio/data/models/item.dart';
+import 'package:provider/provider.dart';
+import 'package:freshio/providers/inventory_provider.dart';
 
 class AddItemPage extends StatefulWidget {
   const AddItemPage({super.key});
@@ -75,7 +77,11 @@ class _AddItemPageState extends State<AddItemPage> {
       quantity: double.tryParse(_qtyCtrl.text) ?? 1,
       unit: _selectedUnit ?? 'pcs',
     );
-    Navigator.pop(context, item);
+
+    print("Adding to pantry");
+    Provider.of<InventoryProvider>(context, listen: false).addItem(item);
+    
+    Navigator.pop(context, true);
   }
 
   @override
@@ -89,6 +95,10 @@ class _AddItemPageState extends State<AddItemPage> {
         title: const Text("Add New Item", style: TextStyle(fontWeight: FontWeight.w900)),
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

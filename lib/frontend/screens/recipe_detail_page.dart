@@ -146,7 +146,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
 
   Widget _buildHeroImage(ThemeData theme) {
     return CachedNetworkImage(
-      imageUrl: widget.recipe.image.isNotEmpty ? widget.recipe.image : "https://source.unsplash.com/400x300/?food",
+      imageUrl: (widget.recipe.image != null && widget.recipe.image.isNotEmpty) ? widget.recipe.image : "https://source.unsplash.com/400x300/?food",
       fit: BoxFit.cover,
       placeholder: (context, url) => Container(
         color: Colors.grey.shade300,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:freshio/core/theme/app_theme.dart';
+import 'dart:math';
 
 class Item {
+  String id;
   String name;
   String category;
   DateTime expiry;
@@ -11,6 +13,7 @@ class Item {
   double weightKg;
 
   Item({
+    String? id,
     required this.name,
     required this.category,
     required this.expiry,
@@ -18,7 +21,7 @@ class Item {
     this.quantity = 1,
     this.unit = "pcs", // Default value
     this.weightKg = 0.5,
-  });
+  }) : id = id ?? "${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}";
 
   String get status {
     final now = DateTime.now();
@@ -40,6 +43,7 @@ class Item {
   String get quantityDisplay => "${quantity % 1 == 0 ? quantity.toInt() : quantity} $unit";
 
   Map<String, dynamic> toJson() => {
+        "id": id,
         "name": name,
         "category": category,
         "expiry": expiry.toIso8601String(),
@@ -51,6 +55,7 @@ class Item {
 
   factory Item.fromJson(Map<String, dynamic> json) {
     return Item(
+      id: json["id"]?.toString() ?? "${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}",
       name: json["name"] ?? "",
       category: json["category"] ?? "General",
       expiry: json["expiry"] != null 

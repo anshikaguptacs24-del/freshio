@@ -1,80 +1,102 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:freshio/core/theme/app_theme.dart';
-import 'package:freshio/core/constants/app_constants.dart';
 import 'package:freshio/providers/inventory_provider.dart';
+import 'package:freshio/providers/analytics_provider.dart';
+import 'dart:math' as math;
 
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final items = Provider.of<InventoryProvider>(context).items;
-    final screen = MediaQuery.of(context).size;
-
-    if (items.isEmpty) return _buildEmpty(screen);
-
-    // ── BASIC CALCULATIONS ──────────────────────────────────────
-    final double totalKg = items.fold(0.0, (s, e) => s + e.weightKg);
-    final double wastedKg = items.where((e) => e.isWaste).fold(0.0, (s, e) => s + e.weightKg);
-    final double savedKg = totalKg - wastedKg;
-    final double wasteRate = totalKg == 0 ? 0 : (wastedKg / totalKg) * 100;
-
-    // ── CATEGORY CALCULATIONS ───────────────────────────────────
-    final Map<String, int> categoryCounts = {};
-    final Map<String, double> categoryWaste = {};
+    final inventory = Provider.of<InventoryProvider>(context);
+    final analytics = Provider.of<AnalyticsProvider>(context);
     
-    for (var item in items) {
-      categoryCounts[item.category] = (categoryCounts[item.category] ?? 0) + 1;
-      if (item.isWaste) {
-        categoryWaste[item.category] = (categoryWaste[item.category] ?? 0.0) + item.weightKg;
-      }
-    }
+    final items = inventory.items;
+    final totalConsumed = analytics.totalConsumed;
+    
+    if (items.isEmpty && totalConsumed == 0) return _buildEmpty();
 
-    final topCategory = categoryCounts.isEmpty ? "None" : categoryCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+    // Calculations
+    final totalItems = items.length;
+    final expiringSoon = inventory.expiringSoonItems.length;
+    final efficiency = (totalItems + totalConsumed) == 0 
+        ? 0.0 
+        : totalConsumed / (totalItems + totalConsumed);
+
+    // Trend data (Last 7 Days)
+    final List<DateTime> last7Days = List.generate(
+      7,
+      (i) => DateTime.now().subtract(Duration(days: 6 - i)),
+    );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text('Insights & Analytics', style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.textDark)),
-        backgroundColor: AppColors.background,
+        title: const Text('Impact & Analytics', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black87)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: false,
       ),
       body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 📊 OVERVIEW CARDS
-            Row(children: [
-              _StatCard(label: 'Saved', value: '${savedKg.toStringAsFixed(1)}kg', icon: Icons.eco_rounded, color: AppColors.fresh),
-              const SizedBox(width: 12),
-              _StatCard(label: 'Wasted', value: '${wastedKg.toStringAsFixed(1)}kg', icon: Icons.delete_sweep_rounded, color: AppColors.danger),
-            ]),
-            const SizedBox(height: 12),
-            Row(children: [
-              _StatCard(label: 'Waste Rate', value: '${wasteRate.toStringAsFixed(0)}%', icon: Icons.pie_chart_outline, color: AppColors.expiring),
-              const SizedBox(width: 12),
-              _StatCard(label: 'Top Category', value: topCategory, icon: Icons.star_outline_rounded, color: AppColors.secondary),
-            ]),
+            // Efficiency Header
+            _EfficiencyHeader(efficiency: efficiency),
+            
+            const SizedBox(height: 32),
+            // Smart Suggestion
+            _SmartInsightCard(suggestion: analytics.getPersonalizedSuggestion(inventory.expiringSoonItems)),
 
             const SizedBox(height: 32),
-            _SectionTitle("Category Breakdown"),
+            const Text("Weekly Trend", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
-            
-            // 📂 CATEGORY LIST
-            ...categoryCounts.entries.map((entry) {
-              final waste = categoryWaste[entry.key] ?? 0.0;
-              return _CategoryAnalyticsCard(
-                category: entry.key,
-                count: entry.value,
-                wasteKg: waste,
-                totalItems: items.length,
-              );
-            }),
-            
+            _TrendGraph(
+              last7Days: last7Days,
+              consumedPerDay: analytics.consumedPerDay,
+              wastedPerDay: analytics.wastedPerDay,
+            ),
+
+            const SizedBox(height: 32),
+            const Text("Key Metrics", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 16),
+
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.1,
+              children: [
+                _StatCard(
+                  label: "In Pantry",
+                  value: totalItems.toString(),
+                  icon: Icons.inventory_2_rounded,
+                  color: Colors.blue,
+                ),
+                _StatCard(
+                  label: "Expiring Soon",
+                  value: expiringSoon.toString(),
+                  icon: Icons.timer_rounded,
+                  color: Colors.orange,
+                ),
+                _StatCard(
+                  label: "Consumed",
+                  value: totalConsumed.toString(),
+                  icon: Icons.check_circle_rounded,
+                  color: Colors.green,
+                ),
+                _StatCard(
+                  label: "Waste Prevented",
+                  value: totalConsumed.toString(),
+                  icon: Icons.eco_rounded,
+                  color: Colors.teal,
+                ),
+              ],
+            ),
+
             const SizedBox(height: 40),
           ],
         ),
@@ -82,22 +104,210 @@ class AnalyticsPage extends StatelessWidget {
     );
   }
 
-  Widget _SectionTitle(String title) {
-    return Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.textDark));
-  }
-
-  Widget _buildEmpty(Size screen) {
+  Widget _buildEmpty() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.bar_chart_rounded, size: 80, color: AppColors.primary.withOpacity(0.2)),
+          Icon(Icons.insights_rounded, size: 80, color: Colors.grey.shade300),
           const SizedBox(height: 16),
-          const Text('No data yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+          const Text('No data yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
           const SizedBox(height: 8),
-          const Text('Add items to see your pantry insights.', style: TextStyle(color: AppColors.textMuted)),
+          const Text('Start marking items as finished to see analytics.', style: TextStyle(color: Colors.grey)),
         ],
       ),
+    );
+  }
+}
+
+class _EfficiencyHeader extends StatelessWidget {
+  final double efficiency;
+  const _EfficiencyHeader({required this.efficiency});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withOpacity(0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Theme.of(context).colorScheme.primary.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Efficiency Score", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          Text("${(efficiency * 100).toInt()}%", style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          Text(
+            efficiency > 0.8 ? "Great job! You're minimizing waste 🎉" : "Try using items before they expire ⚠️",
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
+          ),
+          const SizedBox(height: 20),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: efficiency,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              minHeight: 8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmartInsightCard extends StatelessWidget {
+  final String suggestion;
+  const _SmartInsightCard({required this.suggestion});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.purple.shade50,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.purple.shade100),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome_rounded, color: Colors.purple.shade400, size: 28),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("SMART INSIGHT", style: TextStyle(color: Colors.purple.shade300, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                const SizedBox(height: 4),
+                Text(
+                  suggestion,
+                  style: TextStyle(color: Colors.purple.shade900, fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrendGraph extends StatelessWidget {
+  final List<DateTime> last7Days;
+  final Map<String, int> consumedPerDay;
+  final Map<String, int> wastedPerDay;
+
+  const _TrendGraph({
+    required this.last7Days,
+    required this.consumedPerDay,
+    required this.wastedPerDay,
+  });
+
+  String _normalize(DateTime d) => "${d.year}-${d.month}-${d.day}";
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: last7Days.map((date) {
+              final key = _normalize(date);
+              final consumed = consumedPerDay[key] ?? 0;
+              final wasted = wastedPerDay[key] ?? 0;
+              final total = math.max(consumed + wasted, 1);
+
+              return Column(
+                children: [
+                  Container(
+                    height: 100,
+                    width: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        // Wasted part (Red)
+                        FractionallySizedBox(
+                          heightFactor: (consumed + wasted) / math.max(total, 5), // relative to max 5 items
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade200,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                        // Consumed part (Green)
+                        FractionallySizedBox(
+                          heightFactor: consumed / math.max(total, 5),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade400,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    date.day.toString(),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _LegendItem(color: Colors.green.shade400, label: "Consumed"),
+              const SizedBox(width: 24),
+              _LegendItem(color: Colors.red.shade200, label: "Wasted"),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 8),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+      ],
     );
   }
 }
@@ -107,66 +317,36 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+
   const _StatCard({required this.label, required this.value, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-          border: Border.all(color: color.withOpacity(0.1)),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 12),
-          Text(value ?? '0', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: color), overflow: TextOverflow.ellipsis),
-          Text(label ?? '', style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.bold)),
-        ]),
-      ),
-    );
-  }
-}
-
-class _CategoryAnalyticsCard extends StatelessWidget {
-  final String category;
-  final int count;
-  final double wasteKg;
-  final int totalItems;
-
-  const _CategoryAnalyticsCard({required this.category, required this.count, required this.wasteKg, required this.totalItems});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final percent = (count / totalItems) * 100;
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
-      child: Row(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.05), borderRadius: BorderRadius.circular(14)),
-            child: Icon(AppConstants.getCategoryIcon(category), color: theme.colorScheme.primary, size: 24),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(category, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-              const SizedBox(height: 4),
-              Text('$count Items • ${percent.toStringAsFixed(0)}% of Pantry', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-            ]),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black87)),
+              Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+            ],
           ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${wasteKg.toStringAsFixed(1)}kg', style: TextStyle(color: wasteKg > 0 ? AppColors.danger : AppColors.fresh, fontWeight: FontWeight.w900, fontSize: 16)),
-            const Text('Waste', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
-          ]),
         ],
       ),
     );

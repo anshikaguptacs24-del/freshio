@@ -4,12 +4,9 @@ import 'package:freshio/core/constants/app_constants.dart';
 
 class EditItemPage extends StatefulWidget {
   final Item item;
-  final int index;
-
   const EditItemPage({
     super.key,
     required this.item,
-    required this.index,
   });
 
   @override
@@ -72,6 +69,7 @@ class _EditItemPageState extends State<EditItemPage> {
     print("DEBUG unit: $unit");
 
     final updated = Item(
+      id: widget.item.id,
       name: name,
       category: category,
       expiry: selectedDate ?? widget.item.expiry,
@@ -104,7 +102,13 @@ class _EditItemPageState extends State<EditItemPage> {
     final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Edit Item")),
+      appBar: AppBar(
+        title: const Text("Edit Item"),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
 
       body: SafeArea(
         child: SingleChildScrollView(

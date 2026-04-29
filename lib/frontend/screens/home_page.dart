@@ -14,6 +14,7 @@ import 'package:freshio/frontend/screens/notification_page.dart';
 import 'package:freshio/frontend/screens/recipe_detail_page.dart';
 import 'package:freshio/core/utils/donation_helper.dart';
 import 'package:freshio/frontend/widgets/smart_assistant.dart';
+import 'package:freshio/frontend/screens/donation_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -83,78 +84,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (mounted && _assistantMsg != null) setState(() {});
   }
 
-  void _showDonationSheet(BuildContext context, List<Item> items, ThemeData theme) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Donate Items 🌍', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: items.isEmpty
-                  ? Center(child: Text('No items eligible for donation', style: TextStyle(color: Colors.grey.shade400)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(24),
-                      itemCount: items.length,
-                      itemBuilder: (context, i) {
-                        final item = items[i];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.grey.shade100),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.name ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text('Expires in ${item.expiry.difference(DateTime.now()).inDays} days', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                  ],
-                                ),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  DonationHelper.openDonationLink(context, item);
-                                },
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                child: const Text('Donate'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -178,97 +108,119 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 controller: _scrollController,
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  // APPBAR
-                  SliverAppBar(
-                    expandedHeight: 0,
-                    floating: true,
-                    backgroundColor: theme.colorScheme.surface,
-                    elevation: 0,
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications_none_rounded, size: 28),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ),
-
-                  // HEADER
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Welcome back,', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey)),
-                          Text('${_userName ?? 'Chef'} 👋', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1)),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // STATS
+                  // HEADER (HERO)
                   SliverToBoxAdapter(
                     child: Container(
-                      height: 140,
-                      margin: const EdgeInsets.symmetric(vertical: 16),
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(24, MediaQuery.of(context).padding.top + 24, 24, 32),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            theme.colorScheme.primary,
+                            theme.colorScheme.primary.withOpacity(0.85),
+                          ],
+                        ),
+                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.primary.withOpacity(0.2),
+                            blurRadius: 12,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          _StatCard(
-                            label: 'Items',
-                            value: items.length.toString(),
-                            icon: Icons.inventory_2_rounded,
-                            color: theme.colorScheme.primary,
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryPage())),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Welcome back,', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 4),
+                                Text('$_userName 👋', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 28, letterSpacing: -0.5, color: Colors.white)),
+                              ],
+                            ),
                           ),
-                          _StatCard(
-                            label: 'Expiring',
-                            value: inventory.expiringSoonItems.length.toString(),
-                            icon: Icons.timer_rounded,
-                            color: Colors.orangeAccent,
+                          GestureDetector(
                             onTap: () {
-                              _scrollController.animateTo(
-                                400,
-                                duration: const Duration(milliseconds: 500),
-                                curve: Curves.easeOut,
-                              );
+                              HapticFeedback.lightImpact();
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage()));
                             },
-                          ),
-                          _StatCard(
-                            label: 'Donations',
-                            value: inventory.donatableItems.length.toString(),
-                            icon: Icons.volunteer_activism_rounded,
-                            color: Colors.teal,
-                            onTap: () => _showDonationSheet(context, inventory.donatableItems, theme),
-                          ),
-                          _StatCard(
-                            label: 'Efficiency',
-                            value: '${inventory.items.isEmpty ? 100 : (100 - (inventory.items.where((i) => i.isWaste).length / inventory.items.length * 100)).toInt()}%',
-                            icon: Icons.eco_rounded,
-                            color: Colors.indigo,
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsPage())),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 24),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
 
+                  // STATS GRID
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                    sliver: SliverGrid.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 1.1,
+                      children: [
+                        _AnimatedStatCard(
+                          label: 'Items',
+                          value: items.length.toString(),
+                          icon: Icons.inventory_2_rounded,
+                          color: theme.colorScheme.primary,
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryPage())),
+                          delay: 0,
+                        ),
+                        _AnimatedStatCard(
+                          label: 'Expiring',
+                          value: inventory.expiringSoonItems.length.toString(),
+                          icon: Icons.timer_rounded,
+                          color: Colors.orange.shade400,
+                          onTap: () {
+                            _scrollController.animateTo(
+                              400,
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.easeOut,
+                            );
+                          },
+                          delay: 100,
+                        ),
+                        _AnimatedStatCard(
+                          label: 'Donations',
+                          value: inventory.donatableItems.length.toString(),
+                          icon: Icons.volunteer_activism_rounded,
+                          color: Colors.teal.shade400,
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DonationPage())),
+                          delay: 200,
+                        ),
+                        _AnimatedStatCard(
+                          label: 'Efficiency',
+                          value: '${items.isEmpty ? 100 : (100 - (items.where((i) => i.isWaste).length / items.length * 100)).toInt()}%',
+                          icon: Icons.eco_rounded,
+                          color: Colors.green.shade400,
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsPage())),
+                          delay: 300,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // CTA SECTION
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: TextButton.icon(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsPage())),
-                        icon: const Icon(Icons.analytics_outlined, size: 18),
-                        label: const Text('View Detailed Analytics', style: TextStyle(fontWeight: FontWeight.bold)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: theme.colorScheme.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          backgroundColor: theme.colorScheme.primary.withOpacity(0.05),
-                        ),
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: _CtaButton(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsPage())),
+                        title: '📊 View Detailed Analytics',
                       ),
                     ),
                   ),
@@ -359,7 +311,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             return _SmartActionCard(
                               item: item,
                               type: SmartActionType.donation,
-                              onTap: () => DonationHelper.openDonationLink(context, item),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DonationPage())),
                             );
                           },
                           childCount: inventory.donatableItems.length,
@@ -379,37 +331,167 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 }
 
-class _StatCard extends StatelessWidget {
+class _AnimatedStatCard extends StatefulWidget {
   final String label;
   final String value;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final int delay;
 
-  const _StatCard({required this.label, required this.value, required this.icon, required this.color, required this.onTap});
+  const _AnimatedStatCard({required this.label, required this.value, required this.icon, required this.color, required this.onTap, required this.delay});
+
+  @override
+  State<_AnimatedStatCard> createState() => _AnimatedStatCardState();
+}
+
+class _AnimatedStatCardState extends State<_AnimatedStatCard> with SingleTickerProviderStateMixin {
+  late AnimationController _entranceController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  bool _isPressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _entranceController, curve: Curves.easeOut));
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic));
+
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) _entranceController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _entranceController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 130,
-        margin: const EdgeInsets.only(right: 16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: color.withOpacity(0.1)),
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: GestureDetector(
+          onTapDown: (_) => setState(() => _isPressed = true),
+          onTapUp: (_) {
+            setState(() => _isPressed = false);
+            HapticFeedback.lightImpact();
+            widget.onTap();
+          },
+          onTapCancel: () => setState(() => _isPressed = false),
+          child: AnimatedScale(
+            scale: _isPressed ? 0.96 : 1.0,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                gradient: LinearGradient(
+                  colors: [Colors.white, widget.color.withOpacity(0.03)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: widget.color.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(widget.icon, color: widget.color, size: 22),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          widget.value,
+                          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.black87),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.label,
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const Spacer(),
-            Text(value ?? '0', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-            Text(label ?? '', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w600)),
-          ],
+      ),
+    );
+  }
+}
+
+class _CtaButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final String title;
+
+  const _CtaButton({required this.onTap, required this.title});
+
+  @override
+  State<_CtaButton> createState() => _CtaButtonState();
+}
+
+class _CtaButtonState extends State<_CtaButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            color: primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: primary.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Text(
+            widget.title,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: primary, fontSize: 15, fontWeight: FontWeight.w700),
+          ),
         ),
       ),
     );
@@ -427,40 +509,62 @@ class _PremiumAssistantCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 50 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: child,
           ),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(color: theme.colorScheme.primary.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 32),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('SMART INSIGHT', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  const SizedBox(height: 4),
-                  Text(message ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
-                ],
+        );
+      },
+      child: GestureDetector(
+        onTap: () {
+          if (onTap != null) {
+            HapticFeedback.lightImpact();
+            onTap!();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(color: theme.colorScheme.primary.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 32),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('SMART INSIGHT', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                    const SizedBox(height: 4),
+                    Text(message ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-              onPressed: onDismiss,
-            ),
-          ],
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  onDismiss();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -498,26 +602,52 @@ class _SmallRecipeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeDetailPage(recipe: match.recipe))),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeDetailPage(recipe: match.recipe)));
+      },
       child: Container(
-        width: 160,
+        width: 180,
         margin: const EdgeInsets.only(right: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.network(
-                match.recipe.image,
-                height: 140,
-                width: 160,
-                fit: BoxFit.cover,
-                errorBuilder: (context, _, __) => Container(color: Colors.grey.shade200),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      match.recipe.image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, _, __) => Container(color: Colors.grey.shade200, child: const Icon(Icons.broken_image, color: Colors.grey)),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 12, left: 12, right: 12,
+                      child: Text(match.recipe.name ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(match.recipe.name ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text('${(match.matchPercentage * 100).toInt()}% Match', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Theme.of(context).colorScheme.primary, size: 16),
+                const SizedBox(width: 4),
+                Text('${(match.matchPercentage * 100).toInt()}% Match', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13, fontWeight: FontWeight.w800)),
+              ],
+            )
           ],
         ),
       ),

@@ -88,7 +88,7 @@ class RecipeProvider extends ChangeNotifier {
       final String image = data['image'] ?? '';
       return Recipe(
         name: name,
-        image: image.isNotEmpty ? image : "https://source.unsplash.com/400x300/?food",
+        image: (image != null && image.isNotEmpty) ? image : "https://source.unsplash.com/400x300/?food",
         ingredients: List<String>.from(data['ingredients'] ?? []),
         steps: List<String>.from(data['steps'] ?? []),
       );

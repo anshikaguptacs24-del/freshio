@@ -5,6 +5,12 @@ import '../screens/home_page.dart';
 import '../screens/inventory_page.dart';
 import '../screens/recipe_page.dart';
 import '../screens/profile_page.dart';
+import '../screens/add_item_page.dart';
+import 'package:provider/provider.dart';
+import 'package:freshio/providers/inventory_provider.dart';
+import 'package:freshio/providers/shopping_provider.dart';
+import 'package:freshio/data/models/item.dart';
+import 'package:flutter/services.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -57,8 +63,10 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final inventoryProvider = Provider.of<InventoryProvider>(context);
 
     return Scaffold(
+      extendBody: true,
       body: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: IndexedStack(
@@ -68,52 +76,62 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
 
       bottomNavigationBar: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: _showNav ? 75 : 0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        height: _showNav ? 100 : 0,
+        alignment: Alignment.bottomCenter,
         child: _showNav
             ? Container(
+                margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, -5),
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
-                child: BottomNavigationBar(
-                  currentIndex: _index,
-                  onTap: _onTap,
-                  type: BottomNavigationBarType.fixed,
-                  elevation: 0,
-                  backgroundColor: Colors.white,
-                  selectedItemColor: primary,
-                  unselectedItemColor: Colors.grey.shade400,
-                  selectedFontSize: 12,
-                  unselectedFontSize: 12,
-                  selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  items: const [
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home_filled),
-                      activeIcon: Icon(Icons.home_filled),
-                      label: "Home",
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.inventory_2_outlined),
-                      activeIcon: Icon(Icons.inventory_2_rounded),
-                      label: "Inventory",
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.restaurant_menu_outlined),
-                      activeIcon: Icon(Icons.restaurant_menu_rounded),
-                      label: "Recipes",
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person_outline_rounded),
-                      activeIcon: Icon(Icons.person_rounded),
-                      label: "Profile",
-                    ),
-                  ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: BottomNavigationBar(
+                    currentIndex: _index,
+                    onTap: _onTap,
+                    type: BottomNavigationBarType.fixed,
+                    elevation: 0,
+                    backgroundColor: Colors.white,
+                    selectedItemColor: primary,
+                    unselectedItemColor: Colors.grey.shade400,
+                    selectedFontSize: 12,
+                    unselectedFontSize: 12,
+                    showSelectedLabels: true,
+                    showUnselectedLabels: false,
+                    selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    items: const [
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home_filled),
+                        activeIcon: Icon(Icons.home_filled),
+                        label: "Home",
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.inventory_2_outlined),
+                        activeIcon: Icon(Icons.inventory_2_rounded),
+                        label: "Pantry",
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.restaurant_menu_outlined),
+                        activeIcon: Icon(Icons.restaurant_menu_rounded),
+                        label: "Recipes",
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.person_outline_rounded),
+                        activeIcon: Icon(Icons.person_rounded),
+                        label: "Profile",
+                      ),
+                    ],
+                  ),
                 ),
               )
             : const SizedBox(),

@@ -312,7 +312,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
               backgroundColor: theme.colorScheme.secondary,
               backgroundImage: user.userPhoto != null ? FileImage(File(user.userPhoto!)) : null,
               child: user.userPhoto == null 
-                  ? Text(user.userName.isNotEmpty ? user.userName[0].toUpperCase() : 'U', 
+                  ? Text((user.userName != null && user.userName.isNotEmpty) ? user.userName[0].toUpperCase() : 'U', 
                       style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white))
                   : null,
             ),
@@ -401,7 +401,7 @@ class _MemberCard extends StatelessWidget {
                     _DietChip(diet: member.diet),
                   ],
                 ),
-                if (member.allergies.isNotEmpty) ...[
+                if (member.allergies != null && member.allergies.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text('Allergies: ${member.allergies.join(", ")}', style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.w600)),
                 ],

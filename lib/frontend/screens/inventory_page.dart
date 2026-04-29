@@ -7,6 +7,9 @@ import 'package:freshio/providers/inventory_provider.dart';
 import 'package:freshio/data/models/item.dart';
 import 'package:freshio/frontend/screens/add_item_page.dart';
 import 'package:freshio/frontend/screens/edit_item_page.dart';
+import 'package:freshio/frontend/widgets/shopping_tab.dart';
+import 'package:freshio/providers/shopping_provider.dart';
+import 'package:freshio/core/constants/app_constants.dart';
 
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
@@ -28,6 +31,13 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     Future.microtask(() {
       if (mounted) {
         context.read<InventoryProvider>().loadItems();
+      }
+    });
+
+    _tabController.addListener(() {
+      if (mounted) {
+        context.read<InventoryProvider>().selectedInventoryTab = _tabController.index;
+        setState(() {});
       }
     });
   }
@@ -65,30 +75,99 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final newItem = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddItemPage()),
-          );
-          if (newItem != null && newItem is Item) {
-            print("Received new item: ${newItem.name}");
-            await context.read<InventoryProvider>().addItem(newItem);
-          }
-        },
-        backgroundColor: theme.colorScheme.primary,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: const Text('Add Item', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+
+      body: SafeArea(
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _PantryTab(searchQuery: _searchQuery),
+            const ShoppingTab(),
+          ],
+        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _PantryTab(searchQuery: _searchQuery),
-          const _ShoppingTab(),
+      floatingActionButton: AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, _) {
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, animation) {
+              return ScaleTransition(scale: animation, child: child);
+            },
+            child: FloatingActionButton.extended(
+              key: ValueKey(_tabController.index),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                if (_tabController.index == 0) {
+                  // Pantry tab
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AddItemPage()),
+                  );
+                } else {
+                  // Shopping tab
+                  _showAddShoppingDialog(context);
+                }
+              },
+              icon: const Icon(Icons.add_rounded, color: Colors.white),
+              backgroundColor: theme.colorScheme.primary,
+              label: Text(
+                _tabController.index == 0 ? "Add Item" : "Add to List",
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
+        },
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  void _showAddShoppingDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Add to Shopping List"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: "Enter item name",
+            border: UnderlineInputBorder(),
+          ),
+          onSubmitted: (val) {
+            if (val.trim().isNotEmpty) {
+              Provider.of<ShoppingProvider>(context, listen: false).addItem(val.trim());
+              Navigator.pop(context);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Provider.of<ShoppingProvider>(context, listen: false).addItem(controller.text.trim());
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text("Add"),
+          ),
         ],
       ),
     );
   }
+
+
 }
 
 class _PantryTab extends StatefulWidget {
@@ -113,8 +192,6 @@ class _PantryTabState extends State<_PantryTab> {
       return query.isEmpty || name.contains(query);
     }).toList();
 
-    print("Rendering PantryTab with ${filteredItems.length} items (Total: ${provider.items.length})");
-
     return Column(
       children: [
         Padding(
@@ -123,7 +200,7 @@ class _PantryTabState extends State<_PantryTab> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
             ),
             child: TextField(
               onChanged: (v) => setState(() => _localSearch = v),
@@ -131,7 +208,7 @@ class _PantryTabState extends State<_PantryTab> {
                 hintText: 'Search pantry...',
                 prefixIcon: Icon(Icons.search_rounded, color: theme.colorScheme.primary),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
           ),
@@ -140,9 +217,77 @@ class _PantryTabState extends State<_PantryTab> {
           child: filteredItems.isEmpty
               ? _buildEmpty(context)
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
                   itemCount: filteredItems.length,
-                  itemBuilder: (context, i) => _InventoryItemCard(item: filteredItems[i]),
+                  itemBuilder: (context, i) {
+                    final item = filteredItems[i];
+                    return Dismissible(
+                      key: Key(item.id),
+                      direction: DismissDirection.endToStart,
+                      confirmDismiss: (direction) async {
+                        return await showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text("Delete Item?"),
+                            content: Text("Are you sure you want to remove ${item.name} from your pantry?"),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text("Cancel"),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                child: const Text("Delete"),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      background: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.only(right: 24),
+                        alignment: Alignment.centerRight,
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                      ),
+                      onDismissed: (_) {
+                        provider.deleteItem(item.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("${item.name} deleted")),
+                        );
+                      },
+                      child: InkWell(
+                        onTap: () async {
+                          HapticFeedback.selectionClick();
+                          final updated = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => EditItemPage(item: item)),
+                          );
+                          if (updated != null && updated is Item) {
+                            provider.updateItem(updated);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: _InventoryItemCard(
+                          item: item,
+                          onFinish: () {
+                            provider.markAsFinished(item.id);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("🎉 ${item.name} consumed!"),
+                                backgroundColor: Colors.green,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
                 ),
         ),
       ],
@@ -154,98 +299,23 @@ class _PantryTabState extends State<_PantryTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(Icons.shopping_basket_outlined, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
-          const Text('No items found', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ShoppingTab extends StatefulWidget {
-  const _ShoppingTab();
-
-  @override
-  State<_ShoppingTab> createState() => _ShoppingTabState();
-}
-
-class _ShoppingTabState extends State<_ShoppingTab> {
-  final List<String> _shoppingItems = [];
-  final _controller = TextEditingController();
-
-  void _add() {
-    if (_controller.text.isEmpty) return;
-    setState(() {
-      _shoppingItems.add(_controller.text);
-      _controller.clear();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-                  ),
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      hintText: 'Add to shopping list...',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                    ),
-                    onSubmitted: (_) => _add(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              CircleAvatar(
-                backgroundColor: theme.colorScheme.primary,
-                child: IconButton(icon: const Icon(Icons.add, color: Colors.white), onPressed: _add),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: _shoppingItems.isEmpty
-                ? const Center(child: Text('Shopping list is empty', style: TextStyle(color: Colors.grey)))
-                : ListView.builder(
-                    itemCount: _shoppingItems.length,
-                    itemBuilder: (context, index) => Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        title: Text(_shoppingItems[index], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                          onPressed: () => setState(() => _shoppingItems.removeAt(index)),
-                        ),
-                      ),
-                    ),
-                  ),
+          const Text('Your pantry is empty 🛒\nStart adding items!', 
+            textAlign: TextAlign.center, 
+            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16)
           ),
         ],
       ),
     );
   }
 }
+
 
 class _InventoryItemCard extends StatelessWidget {
   final Item item;
-  const _InventoryItemCard({required this.item});
+  final VoidCallback onFinish;
+  const _InventoryItemCard({required this.item, required this.onFinish});
 
   @override
   Widget build(BuildContext context) {
@@ -258,15 +328,15 @@ class _InventoryItemCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey.shade100),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
           Container(
-            width: 60, height: 60,
+            width: 56, height: 56,
             decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-            child: Icon(Icons.fastfood_rounded, color: color),
+            child: Icon(Icons.fastfood_rounded, color: color, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -274,7 +344,8 @@ class _InventoryItemCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item.name ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text('${item.quantityDisplay ?? ''} • ${item.category ?? ''}', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                const SizedBox(height: 4),
+                Text('${item.quantityDisplay ?? ''} • ${item.category ?? ''}', style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -282,11 +353,18 @@ class _InventoryItemCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(days <= 0 ? 'Expired' : '$days days', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 14)),
-              const Text('left', style: TextStyle(color: Colors.grey, fontSize: 10)),
+              const Text('left', style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500)),
             ],
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 28),
+            onPressed: onFinish,
+            tooltip: "Mark as finished",
           ),
         ],
       ),
     );
   }
 }
+

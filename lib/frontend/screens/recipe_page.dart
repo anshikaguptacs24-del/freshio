@@ -673,7 +673,7 @@ class _RecipeCardState extends State<_RecipeCard> {
 
   Widget _buildImage(String url, ThemeData theme) {
     return CachedNetworkImage(
-      imageUrl: url.isNotEmpty ? url : "https://source.unsplash.com/400x300/?food",
+      imageUrl: (url != null && url.isNotEmpty) ? url : "https://source.unsplash.com/400x300/?food",
       fit: BoxFit.cover,
       width: double.infinity,
       height: 240,

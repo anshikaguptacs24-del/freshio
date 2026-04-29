@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:freshio/providers/inventory_provider.dart';
 import 'package:freshio/providers/recipe_provider.dart';
 import 'package:freshio/providers/user_provider.dart';
+import 'package:freshio/providers/shopping_provider.dart';
+import 'package:freshio/providers/analytics_provider.dart';
 import 'package:freshio/core/theme/app_theme.dart';
 import 'package:freshio/frontend/screens/splash_page.dart';
 
@@ -42,6 +44,12 @@ class FreshioApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => UserProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ShoppingProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AnalyticsProvider(),
         ),
       ],
 

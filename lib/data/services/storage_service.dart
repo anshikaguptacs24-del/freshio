@@ -25,5 +25,8 @@ class StorageService {
   Future<bool> setBool(String key, bool value) => prefs.setBool(key, value);
   bool? getBool(String key) => prefs.getBool(key);
 
+  Future<bool> setInt(String key, int value) => prefs.setInt(key, value);
+  int? getInt(String key) => prefs.getInt(key);
+
   Future<bool> remove(String key) => prefs.remove(key);
 }
