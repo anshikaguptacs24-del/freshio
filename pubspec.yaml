@@ -5,7 +5,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.12.0-327.1.beta
+  sdk: '>=3.11.5 <4.0.0'
 
 dependencies:
   flutter:
@@ -16,6 +16,7 @@ dependencies:
   # Core features
   provider: ^6.1.5+1
   http: ^1.6.0
+  google_fonts: ^6.2.1
 
   # Caching & storage
   shared_preferences: ^2.5.5
@@ -40,3 +41,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/splash.png
+    - assets/images/shopping.png
+    - assets/images/box_illustration.png
+    - assets/images/calender_illustration.png
+    - assets/images/graph_illustration.png
+    - assets/images/heart_box_illustration.png
+

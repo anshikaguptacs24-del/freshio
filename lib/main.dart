@@ -14,11 +14,16 @@ import 'package:freshio/core/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 1. Initialize local storage
   await StorageService().init();
-  await NotificationService.init();
+  
+  // 2. Correctly call the static init method for notifications
+  // This matches your 'static Future<void> init()' definition
+  await NotificationService.init(); 
+  
   runApp(const FreshioApp());
 }
-
 class FreshioApp extends StatelessWidget {
   const FreshioApp({super.key});
 

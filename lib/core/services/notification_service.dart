@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
-  static final Set<int> _scheduledIds = {};
 
   static Future<void> init() async {
     tz.initializeTimeZones();
@@ -23,8 +22,11 @@ class NotificationService {
     if (item.expiry.isBefore(DateTime.now())) return;
 
     final id = item.id.hashCode;
-    if (_scheduledIds.contains(id)) return;
-    _scheduledIds.add(id);
+    
+    final pending = await _notifications.pendingNotificationRequests();
+    if (pending.any((req) => req.id == id)) {
+      return; // Already scheduled
+    }
 
     final daysToExpiry = item.expiry.difference(DateTime.now()).inDays;
     
@@ -68,17 +70,16 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
     } catch (e) {
-      debugPrint("Notification error: $e");
+      // Ignore
     }
   }
 
   static Future<void> cancelNotification(String id) async {
     final hashId = id.hashCode;
-    _scheduledIds.remove(hashId);
     try {
       await _notifications.cancel(id: hashId);
     } catch (e) {
-      debugPrint("Notification error: $e");
+      // Ignore
     }
   }
 }

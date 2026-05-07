@@ -54,21 +54,19 @@ class RecipeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<Map<String, dynamic>> rawData = await _apiService.fetchRecipes();
-      
-      _recipes = await compute(_parseRecipes, rawData);
+      final List<Recipe> fetchedRecipes = await _apiService.fetchRecipes();
+      _recipes = fetchedRecipes;
       
       // Save to cache
-      await _cacheService.saveRecipes(jsonEncode(rawData));
+      await _cacheService.saveRecipes(jsonEncode(fetchedRecipes.map((r) => r.toJson()).toList()));
       _isInitialized = true;
     } catch (e) {
-      debugPrint("API Fetch failed, trying cache: $e");
       try {
         final cachedDataStr = await _cacheService.getRecipes();
         if (cachedDataStr != null && cachedDataStr.isNotEmpty) {
           final List<dynamic> decoded = await compute(_decodeJson, cachedDataStr);
           final List<Map<String, dynamic>> castedData = decoded.cast<Map<String, dynamic>>();
-          _recipes = await compute(_parseRecipes, castedData);
+          _recipes = castedData.map((data) => Recipe.fromJson(data)).toList();
           _isInitialized = true;
         } else {
           _error = e.toString().replaceAll('Exception: ', '');
@@ -80,19 +78,6 @@ class RecipeProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
-  }
-
-  static List<Recipe> _parseRecipes(List<dynamic> rawData) {
-    return rawData.map((data) {
-      final String name = data['name'] ?? 'Tasty Dish';
-      final String image = data['image'] ?? '';
-      return Recipe(
-        name: name,
-        image: (image != null && image.isNotEmpty) ? image : "https://source.unsplash.com/400x300/?food",
-        ingredients: List<String>.from(data['ingredients'] ?? []),
-        steps: List<String>.from(data['steps'] ?? []),
-      );
-    }).toList();
   }
 
   static String normalize(String text) {

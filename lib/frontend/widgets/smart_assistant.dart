@@ -40,6 +40,7 @@ class _SmartAssistantState extends State<SmartAssistant> with SingleTickerProvid
     _controller.forward();
     HapticFeedback.lightImpact();
 
+    // Auto-close after 4 seconds
     Future.delayed(const Duration(seconds: 4), _close);
   }
 
@@ -75,7 +76,7 @@ class _SmartAssistantState extends State<SmartAssistant> with SingleTickerProvid
             onDismissed: (_) => widget.onDismiss(),
             child: Material(
               elevation: 12,
-              shadowColor: Colors.black.withValues(alpha: 0.1),
+              shadowColor: Colors.black.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
               color: theme.colorScheme.surface,
               child: InkWell(
@@ -88,7 +89,7 @@ class _SmartAssistantState extends State<SmartAssistant> with SingleTickerProvid
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                          color: theme.colorScheme.primary.withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(widget.icon, color: theme.colorScheme.primary, size: 20),

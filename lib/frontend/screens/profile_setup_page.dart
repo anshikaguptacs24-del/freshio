@@ -189,10 +189,27 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> with SingleTickerPr
       padding: EdgeInsets.fromLTRB(hPad, 12, hPad, 20),
       child: Row(children: [
         if (_currentStep == 1) ...[
-          Expanded(child: OutlinedButton(onPressed: () => setState(() => _currentStep = 0), style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.primary), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('Back', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)))),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => setState(() => _currentStep = 0), 
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primary), 
+                padding: const EdgeInsets.symmetric(vertical: 16), 
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+              ), 
+              child: const Text('Back', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))
+            )
+          ),
           const SizedBox(width: 12),
         ],
-        Expanded(flex: 2, child: _AnimatedButton(label: _currentStep == 0 ? 'Continue →' : 'Complete Setup 🌿', isLoading: _isSaving, onTap: () => _currentStep == 0 ? setState(() => _currentStep = 1) : _save())),
+        Expanded(
+          flex: 2, 
+          child: _AnimatedButton(
+            label: _currentStep == 0 ? 'Continue →' : 'Complete Setup 🌿', 
+            isLoading: _isSaving, 
+            onTap: () => _currentStep == 0 ? setState(() => _currentStep = 1) : _save()
+          )
+        ),
       ]),
     );
   }
@@ -256,15 +273,51 @@ class _AnimatedButton extends StatelessWidget {
   final String label;
   final bool isLoading;
   final VoidCallback onTap;
-  const _AnimatedButton({required this.label, required this.isLoading, required this.onTap});
+
+  const _AnimatedButton({
+    required this.label,
+    required this.isLoading,
+    required this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         height: 56,
-        decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))]),
-        child: Center(child: isLoading ? const CircularProgressIndicator(color: Colors.white) : Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))),
+        decoration: BoxDecoration(
+          // Updated to solid maroon color
+          color: const Color(0xFF6B1A2A), 
+          borderRadius: BorderRadius.circular(16), 
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6B1A2A).withValues(alpha: 0.3), 
+              blurRadius: 10, 
+              offset: const Offset(0, 4)
+            )
+          ]
+        ),
+        child: Center(
+          child: isLoading 
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2.5,
+                  ),
+                ) 
+              : Text(
+                  label, 
+                  style: const TextStyle(
+                    color: Colors.white, 
+                    fontWeight: FontWeight.bold, 
+                    fontSize: 16
+                  )
+                )
+        ),
       ),
     );
   }

@@ -9,8 +9,9 @@ class Item {
   DateTime expiry;
   bool isWaste;
   double quantity;
-  String unit; // Added unit
+  String unit; 
   double weightKg;
+  String? imageUrl; // 1. Added imageUrl field
 
   Item({
     String? id,
@@ -19,8 +20,9 @@ class Item {
     required this.expiry,
     this.isWaste = false,
     this.quantity = 1,
-    this.unit = "pcs", // Default value
+    this.unit = "pcs",
     this.weightKg = 0.5,
+    this.imageUrl, // 2. Added to constructor
   }) : id = id ?? "${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}";
 
   String get status {
@@ -39,9 +41,9 @@ class Item {
     return AppColors.fresh;
   }
 
-  // Display quantity with unit
   String get quantityDisplay => "${quantity % 1 == 0 ? quantity.toInt() : quantity} $unit";
 
+  // 3. Updated toJson to include imageUrl
   Map<String, dynamic> toJson() => {
         "id": id,
         "name": name,
@@ -51,8 +53,10 @@ class Item {
         "quantity": quantity,
         "unit": unit,
         "weightKg": weightKg,
+        "imageUrl": imageUrl, 
       };
 
+  // 4. Updated fromJson to include imageUrl
   factory Item.fromJson(Map<String, dynamic> json) {
     return Item(
       id: json["id"]?.toString() ?? "${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}",
@@ -65,6 +69,7 @@ class Item {
       quantity: (json["quantity"] ?? 1).toDouble(),
       unit: json["unit"] ?? "pcs",
       weightKg: (json["weightKg"] ?? 0.5).toDouble(),
+      imageUrl: json["imageUrl"], // Map the image URL from JSON
     );
   }
 }

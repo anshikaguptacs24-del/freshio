@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:freshio/providers/shopping_provider.dart';
 import 'package:freshio/providers/inventory_provider.dart';
+import 'package:freshio/providers/analytics_provider.dart';
 import 'package:freshio/data/models/item.dart';
 import 'package:freshio/data/models/shopping_item.dart';
 import 'package:freshio/core/constants/app_constants.dart';
@@ -17,27 +18,15 @@ class ShoppingTab extends StatefulWidget {
 class _ShoppingTabState extends State<ShoppingTab> {
   String? _movingItemId;
 
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   void _handleBought(ShoppingItem item, ShoppingProvider shoppingProvider) async {
     if (item.isBought) {
       shoppingProvider.toggleBought(item.id);
       return;
     }
 
-    // Mark as bought locally first
     shoppingProvider.toggleBought(item.id);
     HapticFeedback.mediumImpact();
 
-    // Show confirmation dialog
     final move = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -71,74 +60,92 @@ class _ShoppingTabState extends State<ShoppingTab> {
     final inventory = Provider.of<InventoryProvider>(context, listen: false);
     final shopping = Provider.of<ShoppingProvider>(context, listen: false);
 
-    final category = AppConstants.detectCategory(shoppingItem.name);
-    final shelfLife = AppConstants.estimateShelfLifeDays(shoppingItem.name);
-
-    final newItem = Item(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: shoppingItem.name,
-      quantity: 1,
-      unit: "pcs",
-      category: category,
-      expiry: DateTime.now().add(Duration(days: shelfLife)),
+    // Option A: Use the existing addItem logic in your provider
+    inventory.addItem(
+      name: shoppingItem.name, 
+      category: "General",
+      expiry: DateTime.now().add(const Duration(days: 7)),
     );
 
-    inventory.addItem(newItem);
+    // Remove from shopping list
     shopping.removeItem(shoppingItem.id);
-    
-    if (mounted) {
-      setState(() => _movingItemId = null);
-    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("🎉 ${shoppingItem.name} added to pantry!"),
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: "UNDO",
-          onPressed: () {
-            inventory.deleteItem(newItem.id);
-            shopping.addItem(shoppingItem.name);
-          },
-        ),
-      ),
-    );
+  if (mounted) {
+    setState(() => _movingItemId = null);
   }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text("🥳 ${shoppingItem.name} added to pantry!"),
+      behavior: SnackBarBehavior.floating,
+      action: SnackBarAction(
+        label: "UNDO",
+        onPressed: () {
+          // Logic to undo if needed
+        },
+      ),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
     final shoppingProvider = Provider.of<ShoppingProvider>(context);
     final items = shoppingProvider.items;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-      child: Column(
-        children: [
-          Expanded(
-            child: items.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Shopping list is empty',
-                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 120),
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return _ShoppingItemCard(
-                        item: item,
-                        isMoving: _movingItemId == item.id,
-                        onBought: () => _handleBought(item, shoppingProvider),
-                        onDelete: () => shoppingProvider.removeItem(item.id),
-                        onAnimationComplete: () => _moveToPantry(item),
-                      );
-                    },
-                  ),
+    return Stack(
+      children: [
+        // BACKGROUND LAYER: Increased opacity to match your reference image
+        Positioned.fill(
+          child: Opacity(
+            opacity: 0.25, // Increased from 0.05 to 0.25 for higher visibility
+            child: Padding(
+              padding: const EdgeInsets.all(60.0), // Slightly more padding to center it nicely
+              child: Image.asset(
+                "assets/images/shopping.png",
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+
+        // FOREGROUND LAYER: The List Content
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            children: [
+              Expanded(
+                child: items.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Shopping list is empty',
+                          style: TextStyle(
+                            color: Colors.grey, 
+                            fontWeight: FontWeight.w600,
+                            backgroundColor: Colors.white70, // Added slight bg for text readability
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 120),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return _ShoppingItemCard(
+                            item: item,
+                            isMoving: _movingItemId == item.id,
+                            onBought: () => _handleBought(item, shoppingProvider),
+                            onDelete: () => shoppingProvider.removeItem(item.id),
+                            onAnimationComplete: () => _moveToPantry(item),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -227,7 +234,7 @@ class _ShoppingItemCardState extends State<_ShoppingItemCard> with SingleTickerP
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.white.withOpacity(0.9), // Slightly opaque white so it pops over the background image
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(

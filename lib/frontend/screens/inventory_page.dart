@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import 'package:freshio/core/theme/app_theme.dart';
 import 'package:freshio/providers/inventory_provider.dart';
 import 'package:freshio/data/models/item.dart';
 import 'package:freshio/frontend/screens/add_item_page.dart';
 import 'package:freshio/frontend/screens/edit_item_page.dart';
 import 'package:freshio/frontend/widgets/shopping_tab.dart';
 import 'package:freshio/providers/shopping_provider.dart';
-import 'package:freshio/core/constants/app_constants.dart';
+import 'package:freshio/providers/analytics_provider.dart';
 
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
@@ -20,17 +19,17 @@ class InventoryPage extends StatefulWidget {
 
 class _InventoryPageState extends State<InventoryPage> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  String _searchQuery = '';
+  final String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     
-    // Load items when page opens
     Future.microtask(() {
       if (mounted) {
-        context.read<InventoryProvider>().loadItems();
+        final analytics = context.read<AnalyticsProvider>();
+        context.read<InventoryProvider>().loadItems(analytics);
       }
     });
 
@@ -53,20 +52,24 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: const Color(0xFFF8F9F8), // Light background like image 2
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text(
           'Inventory',
-          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: Colors.black),
         ),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: theme.colorScheme.primary,
+          labelColor: const Color(0xFF6B1126), // Deep wine color from your image
           unselectedLabelColor: Colors.grey,
-          indicatorColor: theme.colorScheme.primary,
+          indicatorColor: const Color(0xFF6B1126),
+          indicatorSize: TabBarIndicatorSize.label,
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           tabs: const [
@@ -85,38 +88,33 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
           ],
         ),
       ),
-      floatingActionButton: AnimatedBuilder(
-        animation: _tabController,
-        builder: (context, _) {
-          return AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            transitionBuilder: (child, animation) {
-              return ScaleTransition(scale: animation, child: child);
-            },
-            child: FloatingActionButton.extended(
-              key: ValueKey(_tabController.index),
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                if (_tabController.index == 0) {
-                  // Pantry tab
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AddItemPage()),
-                  );
-                } else {
-                  // Shopping tab
-                  _showAddShoppingDialog(context);
-                }
-              },
-              icon: const Icon(Icons.add_rounded, color: Colors.white),
-              backgroundColor: theme.colorScheme.primary,
-              label: Text(
-                _tabController.index == 0 ? "Add Item" : "Add to List",
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
-          );
+      
+      // Fixed Floating Action Button to match Image 1
+      floatingActionButton: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          if (_tabController.index == 0) {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const AddItemPage()));
+          } else {
+            _showAddShoppingDialog(context);
+          }
         },
+        child: Container(
+          width: 80,
+          height: 80,
+          decoration: const BoxDecoration(
+            color: Color(0xFF6B1126),
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
+          ),
+          child: const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add, color: Colors.white, size: 28),
+              Text("Add Item", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+            ],
+          ),
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
@@ -132,10 +130,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: "Enter item name",
-            border: UnderlineInputBorder(),
-          ),
           onSubmitted: (val) {
             if (val.trim().isNotEmpty) {
               Provider.of<ShoppingProvider>(context, listen: false).addItem(val.trim());
@@ -144,10 +138,7 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
           },
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () {
               if (controller.text.trim().isNotEmpty) {
@@ -155,19 +146,12 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
                 Navigator.pop(context);
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
             child: const Text("Add"),
           ),
         ],
       ),
     );
   }
-
-
 }
 
 class _PantryTab extends StatefulWidget {
@@ -184,187 +168,143 @@ class _PantryTabState extends State<_PantryTab> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<InventoryProvider>(context);
-    final theme = Theme.of(context);
-
     final filteredItems = provider.items.where((item) {
       final name = (item.name ?? '').toLowerCase();
-      final query = (_localSearch ?? '').toLowerCase();
+      final query = _localSearch.toLowerCase();
       return query.isEmpty || name.contains(query);
     }).toList();
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
-            ),
-            child: TextField(
-              onChanged: (v) => setState(() => _localSearch = v),
-              decoration: InputDecoration(
-                hintText: 'Search pantry...',
-                prefixIcon: Icon(Icons.search_rounded, color: theme.colorScheme.primary),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+    return CustomScrollView(
+      slivers: [
+        // Search Bar
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+              ),
+              child: TextField(
+                onChanged: (v) => setState(() => _localSearch = v),
+                decoration: const InputDecoration(
+                  hintText: 'Search pantry...',
+                  prefixIcon: Icon(Icons.search, color: Colors.grey),
+                  border: InputBorder.none,
+                ),
               ),
             ),
           ),
         ),
-        Expanded(
-          child: filteredItems.isEmpty
-              ? _buildEmpty(context)
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                  itemCount: filteredItems.length,
-                  itemBuilder: (context, i) {
-                    final item = filteredItems[i];
-                    return Dismissible(
-                      key: Key(item.id),
-                      direction: DismissDirection.endToStart,
-                      confirmDismiss: (direction) async {
-                        return await showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text("Delete Item?"),
-                            content: Text("Are you sure you want to remove ${item.name} from your pantry?"),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text("Cancel"),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                child: const Text("Delete"),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      background: Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.only(right: 24),
-                        alignment: Alignment.centerRight,
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
-                      ),
-                      onDismissed: (_) {
-                        provider.deleteItem(item.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("${item.name} deleted")),
-                        );
-                      },
-                      child: InkWell(
-                        onTap: () async {
-                          HapticFeedback.selectionClick();
-                          final updated = await Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => EditItemPage(item: item)),
-                          );
-                          if (updated != null && updated is Item) {
-                            provider.updateItem(updated);
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: _InventoryItemCard(
-                          item: item,
-                          onFinish: () {
-                            provider.markAsFinished(item.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("🎉 ${item.name} consumed!"),
-                                backgroundColor: Colors.green,
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  },
+
+        // Grid View like Image 2
+        filteredItems.isEmpty
+            ? SliverFillRemaining(child: _buildEmpty())
+            : SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 20,
+                    crossAxisSpacing: 15,
+                    childAspectRatio: 0.75,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = filteredItems[index];
+                      return _InventoryGridItem(item: item);
+                    },
+                    childCount: filteredItems.length,
+                  ),
                 ),
-        ),
+              ),
+        const SliverToBoxAdapter(child: SizedBox(height: 120)), // Space for FAB
       ],
     );
   }
 
-  Widget _buildEmpty(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.shopping_basket_outlined, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          const Text('Your pantry is empty 🛒\nStart adding items!', 
-            textAlign: TextAlign.center, 
-            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16)
-          ),
-        ],
-      ),
+  Widget _buildEmpty() {
+    return const Center(
+      child: Text('Your pantry is empty 🛒', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
     );
   }
 }
 
-
-class _InventoryItemCard extends StatelessWidget {
+class _InventoryGridItem extends StatelessWidget {
   final Item item;
-  final VoidCallback onFinish;
-  const _InventoryItemCard({required this.item, required this.onFinish});
+  const _InventoryGridItem({required this.item});
+
+  Color _getBgColor() {
+    final colors = [
+      const Color(0xFFD6EAF8), 
+      const Color(0xFFFCF3CF), 
+      const Color(0xFFD5F5E3), 
+      const Color(0xFFFADBD8)
+    ];
+    return colors[(item.name ?? '').hashCode % colors.length];
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final days = item.expiry.difference(DateTime.now()).inDays;
-    final color = days <= 2 ? Colors.orange : theme.colorScheme.primary;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context, 
+        MaterialPageRoute(builder: (_) => EditItemPage(item: item))
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-            child: Icon(Icons.fastfood_rounded, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.name ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text('${item.quantityDisplay ?? ''} • ${item.category ?? ''}', style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
-              ],
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: _getBgColor(),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              // --- CHANGE STARTS HERE ---
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: (item.imageUrl != null && item.imageUrl!.isNotEmpty)
+                    ? Image.network(
+                        item.imageUrl!,
+                        key: ValueKey(item.imageUrl),
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                        },
+                        errorBuilder: (context, error, stackTrace) => Center(
+                          child: Text(
+                            item.name?[0].toUpperCase() ?? '?',
+                            style: const TextStyle(fontSize: 40),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          item.name?[0].toUpperCase() ?? '?',
+                          style: const TextStyle(fontSize: 40),
+                        ),
+                      ),
+              ),
+              // --- CHANGE ENDS HERE ---
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(days <= 0 ? 'Expired' : '$days days', style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 14)),
-              const Text('left', style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500)),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            item.name ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 28),
-            onPressed: onFinish,
-            tooltip: "Mark as finished",
+          Text(
+            item.quantityDisplay ?? '',
+            style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
   }
 }
-

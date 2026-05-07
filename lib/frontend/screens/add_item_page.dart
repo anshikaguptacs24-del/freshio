@@ -3,6 +3,7 @@ import 'package:freshio/core/constants/app_constants.dart';
 import 'package:freshio/data/models/item.dart';
 import 'package:provider/provider.dart';
 import 'package:freshio/providers/inventory_provider.dart';
+import 'package:freshio/providers/analytics_provider.dart';
 
 class AddItemPage extends StatefulWidget {
   const AddItemPage({super.key});
@@ -13,8 +14,8 @@ class AddItemPage extends StatefulWidget {
 
 class _AddItemPageState extends State<AddItemPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
-  final _qtyCtrl = TextEditingController(text: "1");
+  final _nameController = TextEditingController();
+  final _quantityController = TextEditingController(text: "1");
   final _otherCategoryCtrl = TextEditingController();
 
   DateTime? _selectedDate;
@@ -25,21 +26,21 @@ class _AddItemPageState extends State<AddItemPage> {
   @override
   void initState() {
     super.initState();
-    _nameCtrl.addListener(_onNameChanged);
+    _nameController.addListener(_onNameChanged);
   }
 
   @override
   void dispose() {
-    _nameCtrl.removeListener(_onNameChanged);
-    _nameCtrl.dispose();
-    _qtyCtrl.dispose();
+    _nameController.removeListener(_onNameChanged);
+    _nameController.dispose();
+    _quantityController.dispose();
     _otherCategoryCtrl.dispose();
     super.dispose();
   }
 
   void _onNameChanged() {
     if (_manualCategorySet) return;
-    final text = _nameCtrl.text;
+    final text = _nameController.text;
     final detected = AppConstants.detectCategory(text);
     if (detected != _selectedCategory) {
       setState(() => _selectedCategory = detected);
@@ -49,17 +50,17 @@ class _AddItemPageState extends State<AddItemPage> {
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 3)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
+     initialDate: DateTime.now(), // Change this line to DateTime.now()
+     firstDate: DateTime.now(),    // This ensures users can't pick past dates
+     lastDate: DateTime(2101),
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     
-    final name = _nameCtrl.text.trim();
+    final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
     final categoryStr = _selectedCategory ?? 'General';
@@ -70,16 +71,15 @@ class _AddItemPageState extends State<AddItemPage> {
     print("DEBUG category: $finalCategory");
     print("DEBUG unit: $_selectedUnit");
 
-    final item = Item(
-      name: name,
-      category: finalCategory.isEmpty ? 'General' : finalCategory,
-      expiry: _selectedDate ?? DateTime.now().add(const Duration(days: 3)),
-      quantity: double.tryParse(_qtyCtrl.text) ?? 1,
-      unit: _selectedUnit ?? 'pcs',
-    );
-
     print("Adding to pantry");
-    Provider.of<InventoryProvider>(context, listen: false).addItem(item);
+    final analytics = Provider.of<AnalyticsProvider>(context, listen: false);
+    await Provider.of<InventoryProvider>(context, listen: false).addItem(
+      name: _nameController.text, 
+      category: finalCategory, 
+      expiry: _selectedDate ?? DateTime.now().add(const Duration(days: 3)),
+      quantity: double.tryParse(_quantityController.text) ?? 1.0,
+      unit: _selectedUnit,
+    );
     
     Navigator.pop(context, true);
   }
@@ -111,14 +111,14 @@ class _AddItemPageState extends State<AddItemPage> {
                 _buildSectionTitle("Item Information"),
                 const SizedBox(height: 16),
                 
-                _buildTextField(_nameCtrl, "Item Name", Icons.shopping_bag_outlined),
+                _buildTextField(_nameController, "Item Name", Icons.shopping_bag_outlined),
                 const SizedBox(height: 16),
 
                 // QUANTITY & UNIT ROW
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 3, child: _buildTextField(_qtyCtrl, "Qty", Icons.numbers_rounded, isNumber: true)),
+                    Expanded(flex: 3, child: _buildTextField(_quantityController, "Qty", Icons.numbers_rounded, isNumber: true)),
                     const SizedBox(width: 12),
                     Expanded(flex: 2, child: _buildUnitDropdown()),
                   ],
@@ -144,7 +144,7 @@ class _AddItemPageState extends State<AddItemPage> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _save,
+                    onPressed: () async => await _save(),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primary,
                       foregroundColor: Colors.white,

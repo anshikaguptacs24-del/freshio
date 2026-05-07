@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:freshio/providers/inventory_provider.dart';
+import 'package:freshio/providers/analytics_provider.dart';
 import 'package:freshio/core/utils/donation_helper.dart';
 import 'package:freshio/data/models/item.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -66,9 +67,10 @@ class _DonationPageState extends State<DonationPage> {
     );
 
     if (confirmed == true) {
+      final analytics = Provider.of<AnalyticsProvider>(context, listen: false);
       // 1. Remove items from inventory
       for (var id in selectedItems) {
-        inventory.deleteItem(id);
+        inventory.deleteItem(analytics, id);
       }
 
       // 2. Show success message
