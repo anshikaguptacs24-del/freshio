@@ -1,0 +1,1 @@
+sdk.dir=C:\\Users\\Anshika\\AppData\\Local\\Android\\Sdk

@@ -1,0 +1,75 @@
+import 'package:flutter/material.dart';
+import 'package:freshio/core/theme/app_theme.dart';
+import 'dart:math';
+
+class Item {
+  String id;
+  String name;
+  String category;
+  DateTime expiry;
+  bool isWaste;
+  double quantity;
+  String unit; 
+  double weightKg;
+  String? imageUrl; // 1. Added imageUrl field
+
+  Item({
+    String? id,
+    required this.name,
+    required this.category,
+    required this.expiry,
+    this.isWaste = false,
+    this.quantity = 1,
+    this.unit = "pcs",
+    this.weightKg = 0.5,
+    this.imageUrl, // 2. Added to constructor
+  }) : id = id ?? "${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}";
+
+  String get status {
+    final now = DateTime.now();
+    if (isWaste) return "Waste";
+    if (expiry.isBefore(now)) return "Expired";
+    if (expiry.difference(now).inDays <= 1) return "Expiring Soon";
+    return "Fresh";
+  }
+
+  Color get color {
+    if (isWaste) return AppColors.waste;
+    final now = DateTime.now();
+    if (expiry.isBefore(now)) return AppColors.expired;
+    if (expiry.difference(now).inDays <= 1) return AppColors.expiring;
+    return AppColors.fresh;
+  }
+
+  String get quantityDisplay => "${quantity % 1 == 0 ? quantity.toInt() : quantity} $unit";
+
+  // 3. Updated toJson to include imageUrl
+  Map<String, dynamic> toJson() => {
+        "id": id,
+        "name": name,
+        "category": category,
+        "expiry": expiry.toIso8601String(),
+        "isWaste": isWaste,
+        "quantity": quantity,
+        "unit": unit,
+        "weightKg": weightKg,
+        "imageUrl": imageUrl, 
+      };
+
+  // 4. Updated fromJson to include imageUrl
+  factory Item.fromJson(Map<String, dynamic> json) {
+    return Item(
+      id: json["id"]?.toString() ?? "${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}",
+      name: json["name"] ?? "",
+      category: json["category"] ?? "General",
+      expiry: json["expiry"] != null 
+          ? DateTime.parse(json["expiry"]) 
+          : DateTime.now().add(const Duration(days: 3)),
+      isWaste: json["isWaste"] ?? false,
+      quantity: (json["quantity"] ?? 1).toDouble(),
+      unit: json["unit"] ?? "pcs",
+      weightKg: (json["weightKg"] ?? 0.5).toDouble(),
+      imageUrl: json["imageUrl"], // Map the image URL from JSON
+    );
+  }
+}

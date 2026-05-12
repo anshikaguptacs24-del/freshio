@@ -1,0 +1,51 @@
+name: freshio
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.11.5 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Core features
+  provider: ^6.1.5+1
+  http: ^1.6.0
+  google_fonts: ^6.2.1
+
+  # Caching & storage
+  shared_preferences: ^2.5.5
+  cached_network_image: ^3.4.1
+
+  # Features you already use
+  speech_to_text: ^7.3.0
+  mobile_scanner: ^7.2.0
+  flutter_local_notifications: ^21.0.0
+  timezone: ^0.11.0
+  table_calendar: ^3.2.0
+  image_picker: ^1.2.1
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  url_launcher: ^6.3.2
+  confetti: ^0.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/splash.png
+    - assets/images/shopping.png
+    - assets/images/box_illustration.png
+    - assets/images/calender_illustration.png
+    - assets/images/graph_illustration.png
+    - assets/images/heart_box_illustration.png
+

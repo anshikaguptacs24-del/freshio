@@ -1,0 +1,224 @@
+import 'package:flutter/material.dart';
+import 'package:freshio/data/models/item.dart';
+import 'package:freshio/core/constants/app_constants.dart';
+
+class EditItemPage extends StatefulWidget {
+  final Item item;
+  const EditItemPage({
+    super.key,
+    required this.item,
+  });
+
+  @override
+  State<EditItemPage> createState() => _EditItemPageState();
+}
+
+class _EditItemPageState extends State<EditItemPage> {
+
+  final _formKey = GlobalKey<FormState>();
+
+  late TextEditingController nameController;
+  late TextEditingController quantityController;
+
+  late String selectedUnit;
+  DateTime? selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+
+    nameController = TextEditingController(text: widget.item.name);
+    quantityController =
+        TextEditingController(text: widget.item.quantity.toString());
+    selectedUnit = widget.item.unit;
+
+    selectedDate = widget.item.expiry;
+  }
+
+  ////////////////////////////////////////////////////////////
+  // 📅 DATE PICKER
+  ////////////////////////////////////////////////////////////
+
+  Future<void> pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() => selectedDate = picked);
+    }
+  }
+
+  ////////////////////////////////////////////////////////////
+  // 💾 SAVE
+  ////////////////////////////////////////////////////////////
+
+  void save() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final name = nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final category = widget.item.category ?? 'General';
+    final unit = selectedUnit ?? 'pcs';
+
+    print("DEBUG category: $category");
+    print("DEBUG unit: $unit");
+
+    final updated = Item(
+      id: widget.item.id,
+      name: name,
+      category: category,
+      expiry: selectedDate ?? widget.item.expiry,
+      quantity: double.tryParse(quantityController.text) ?? 1,
+      unit: unit,
+      isWaste: widget.item.isWaste,
+    );
+
+    Navigator.pop(context, updated);
+  }
+
+  ////////////////////////////////////////////////////////////
+  // CLEANUP
+  ////////////////////////////////////////////////////////////
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    quantityController.dispose();
+    super.dispose();
+  }
+
+  ////////////////////////////////////////////////////////////
+  // UI
+  ////////////////////////////////////////////////////////////
+
+  @override
+  Widget build(BuildContext context) {
+
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Edit Item"),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+
+          child: Form(
+            key: _formKey,
+
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                //////////////////////////////////////////////////
+                // NAME
+                //////////////////////////////////////////////////
+
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: "Item Name",
+                  ),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? "Enter item name" : null,
+                ),
+
+                const SizedBox(height: 16),
+
+                //////////////////////////////////////////////////
+                // QUANTITY
+                //////////////////////////////////////////////////
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        controller: quantityController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: "Quantity",
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: DropdownButtonFormField<String>(
+                        value: selectedUnit ?? 'pcs',
+                        decoration: const InputDecoration(
+                          labelText: "Unit",
+                        ),
+                        items: AppConstants.filteredUnits
+                            .map((u) => DropdownMenuItem(value: u, child: Text(u ?? '')))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() => selectedUnit = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                //////////////////////////////////////////////////
+                // DATE
+                //////////////////////////////////////////////////
+
+                GestureDetector(
+                  onTap: pickDate,
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          selectedDate == null
+                              ? "Select Expiry Date"
+                              : "${(selectedDate?.toLocal() ?? '').toString().split(" ")[0]}",
+                        ),
+                        Icon(Icons.calendar_today, color: primary),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                //////////////////////////////////////////////////
+                // SAVE BUTTON
+                //////////////////////////////////////////////////
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: save,
+                    child: const Text("Save Changes"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
